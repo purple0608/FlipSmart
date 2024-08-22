@@ -1,60 +1,83 @@
-import { exec } from "child_process";
+// Import necessary modules
 import cors from "cors";
 import dotenv from "dotenv";
-import voice from "elevenlabs-node";
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { readFile } from 'fs/promises';
 import express from "express";
 import { promises as fs } from "fs";
 import OpenAI from "openai";
+import {
+  GoogleGenerativeAI,
+  HarmCategory,
+  HarmBlockThreshold,
+} from "@google/generative-ai";
+
 dotenv.config();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "-", // Your OpenAI API key here, I used "-" to avoid errors when the key is not set but you should not do that
-});
-
+// Initialize API keys and models
+const apiKey = "AIzaSyCmxupyVwQeUMFYM-ho2F5dQ9-gBKSEc2w"; // Replace with your actual API key
 const elevenLabsApiKey = "sk_799b23489515a01b5c5325e5d67a23a460a1a61537cae4f6";
 const voiceID = "kgG7dCoKCfLehAPWkJOE";
 
+const genAI = new GoogleGenerativeAI(apiKey);
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
+});
+const generationConfig = {
+  temperature: 1,
+  topP: 0.95,
+  topK: 64,
+  maxOutputTokens: 512,
+  responseMimeType: "text/plain",
+};
+
+// Initialize Express app
 const app = express();
 app.use(express.json());
 app.use(cors());
 const port = 3000;
 
+// Helper functions
+const execPromise = promisify(exec);
+
+const textToSpeech = async (textInput) => {
+  try {
+    // Call the Python script to generate audio
+    await execPromise(`python3 /home/nandinithakur/Desktop/avatar/bit/backend/sample.py "${textInput}"`);
+    console.log("Audio generated successfully!");
+  } catch (error) {
+    console.error("Error executing Python script:", error);
+    throw error;
+  }
+};
+
+const readJsonTranscript = async (file) => {
+  const data = await fs.readFile(file, "utf8");
+  return JSON.parse(data);
+};
+
+const audioFileToBase64 = async (file) => {
+  const data = await fs.readFile(file);
+  return data.toString("base64");
+};
+
+// Routes
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
 app.get("/voices", async (req, res) => {
+  // Assuming you have a `voice` object to get voices
+  // Replace with the actual method to get voices
   res.send(await voice.getVoices(elevenLabsApiKey));
 });
 
-const execCommand = (command) => {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) reject(error);
-      resolve(stdout);
-    });
-  });
-};
-
-const lipSyncMessage = async (message) => {
-  const time = new Date().getTime();
-  console.log(`Starting conversion for message ${message}`);
-  await execCommand(
-    `ffmpeg -y -i audios/message_${message}.mp3 audios/message_${message}.wav`
-    // -y to overwrite the file
-  );
-  console.log(`Conversion done in ${new Date().getTime() - time}ms`);
-  await execCommand(
-    `./bin/rhubarb -f json -o audios/message_${message}.json audios/message_${message}.wav -r phonetic`
-  );
-  // -r phonetic is faster but less accurate
-  console.log(`Lip sync done in ${new Date().getTime() - time}ms`);
-};
-
 app.post("/chat", async (req, res) => {
   const userMessage = req.body.message;
+
   if (!userMessage) {
-    res.send({
+    return res.send({
       messages: [
         {
           text: "Hey dear... How was your day?",
@@ -72,10 +95,10 @@ app.post("/chat", async (req, res) => {
         },
       ],
     });
-    return;
   }
-  if (!elevenLabsApiKey || openai.apiKey === "-") {
-    res.send({
+
+  if (!elevenLabsApiKey || !apiKey) {
+    return res.send({
       messages: [
         {
           text: "Please my dear, don't forget to add your API keys!",
@@ -85,7 +108,7 @@ app.post("/chat", async (req, res) => {
           animation: "Angry",
         },
         {
-          text: "You don't want to ruin Wawa Sensei with a crazy ChatGPT and ElevenLabs bill, right?",
+          text: "You don't want to ruin Wawa Sensei with a crazy bill, right?",
           audio: await audioFileToBase64("audios/api_1.wav"),
           lipsync: await readJsonTranscript("audios/api_1.json"),
           facialExpression: "smile",
@@ -93,64 +116,76 @@ app.post("/chat", async (req, res) => {
         },
       ],
     });
-    return;
   }
 
+  try {
+    console.log("1. Chat started\n");
 
-  // const completion = await openai.chat.completions.create({
-  //   model: "gpt-3.5-turbo-1106",
-  //   max_tokens: 1000,
-  //   temperature: 0.6,
-  //   response_format: {
-  //     type: "json_object",
-  //   },
-  //   messages: [
-  //     {
-  //       role: "system",
-  //       content: `
-  //       You are a virtual girlfriend.
-  //       You will always reply with a JSON array of messages. With a maximum of 3 messages.
-  //       Each message has a text, facialExpression, and animation property.
-  //       The different facial expressions are: smile, sad, angry, surprised, funnyFace, and default.
-  //       The different animations are: Talking_0, Talking_1, Talking_2, Crying, Laughing, Rumba, Idle, Terrified, and Angry. 
-  //       `,
-  //     },
-  //     {
-  //       role: "user",
-  //       content: userMessage || "Hello",
-  //     },
-  //   ],
-  // });
+    const chatSession = model.startChat({
+      generationConfig,
+      history: [],
+    });
 
-  
-  let messages = JSON.parse(completion.choices[0].message.content);
-  if (messages.messages) {
-    messages = messages.messages; // ChatGPT is not 100% reliable, sometimes it directly returns an array and sometimes a JSON object with a messages property
+    console.log("2. Model started\n");
+
+    // Send the user's message to Gemini AI
+    const result = await chatSession.sendMessage(userMessage);
+    if (result) {
+      console.log(result.response.text());
+      console.log("Success !");
+    } else {
+      console.log("No Chat generated");
+    }
+
+    console.log("3. Message Generated\n");
+
+    let messages = [
+      {
+        text: result.response.text(),
+        facialExpression: "default",
+        animation: "Talking_0",
+      },
+    ];
+
+    console.log("4. Voice gen Started \n");
+
+    for (let i = 0; i < messages.length; i++) {
+      const message = messages[i];
+      console.log(message);
+
+      const fileName = `output_audio.mp3`;
+
+      console.log("5. Audio gen Started \n");
+
+      const textInput = message.text;
+      console.log(textInput);
+      console.log("6. Text extracted");
+
+      await textToSpeech(textInput);
+
+      console.log("7. Got the voice !!");
+
+      // Generate lipsync data
+      // await lipSyncMessage(i);
+
+      console.log("8. Got the lip sync");
+
+      // Attach audio and lipsync to the message
+      message.audio = await audioFileToBase64(fileName);
+      console.log("9. Audio attached\n");
+
+      // message.lipsync = await readJsonTranscript(`au`);
+      console.log("10. Lip Sync attached\n");
+    }
+
+    console.log("10. Yeah !! Audio Created");
+
+    res.send({ messages });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).send({ error: "Something went wrong!" });
   }
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
-    // generate audio file
-    const fileName = `audios/message_${i}.mp3`; // The name of your audio file
-    const textInput = message.text; // The text you wish to convert to speech
-    await voice.textToSpeech(elevenLabsApiKey, voiceID, fileName, textInput);
-    // generate lipsync
-    await lipSyncMessage(i);
-    message.audio = await audioFileToBase64(fileName);
-    message.lipsync = await readJsonTranscript(`audios/message_${i}.json`);
-  }
-
-  res.send({ messages });
 });
-
-const readJsonTranscript = async (file) => {
-  const data = await fs.readFile(file, "utf8");
-  return JSON.parse(data);
-};
-
-const audioFileToBase64 = async (file) => {
-  const data = await fs.readFile(file);
-  return data.toString("base64");
-};
 
 app.listen(port, () => {
   console.log(`Virtual Girlfriend listening on port ${port}`);
