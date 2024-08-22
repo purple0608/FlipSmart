@@ -11,7 +11,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "-", // Your OpenAI API key here, I used "-" to avoid errors when the key is not set but you should not do that
 });
 
-const elevenLabsApiKey = process.env.ELEVEN_LABS_API_KEY;
+const elevenLabsApiKey = "sk_799b23489515a01b5c5325e5d67a23a460a1a61537cae4f6";
 const voiceID = "kgG7dCoKCfLehAPWkJOE";
 
 const app = express();
@@ -96,6 +96,7 @@ app.post("/chat", async (req, res) => {
     return;
   }
 
+
   // const completion = await openai.chat.completions.create({
   //   model: "gpt-3.5-turbo-1106",
   //   max_tokens: 1000,
@@ -120,6 +121,8 @@ app.post("/chat", async (req, res) => {
   //     },
   //   ],
   // });
+
+  
   let messages = JSON.parse(completion.choices[0].message.content);
   if (messages.messages) {
     messages = messages.messages; // ChatGPT is not 100% reliable, sometimes it directly returns an array and sometimes a JSON object with a messages property

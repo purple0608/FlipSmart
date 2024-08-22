@@ -1,0 +1,14 @@
+@keyframes slide {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+  
+  .slider {
+    width: 200%; /* Adjust this based on the number of images */
+    animation: slide 12s linear infinite;
+  }
+  
