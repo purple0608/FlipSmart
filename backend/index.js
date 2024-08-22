@@ -44,13 +44,16 @@ const execPromise = promisify(exec);
 const textToSpeech = async (textInput) => {
   try {
     // Call the Python script to generate audio
-    await execPromise(`python3 /home/nandinithakur/Desktop/avatar/bit/backend/sample.py "${textInput}"`);
+    await execPromise(
+      `python sample.py "${textInput}"`
+    );
     console.log("Audio generated successfully!");
   } catch (error) {
     console.error("Error executing Python script:", error);
     throw error;
   }
 };
+
 
 const readJsonTranscript = async (file) => {
   const data = await fs.readFile(file, "utf8");
@@ -123,7 +126,24 @@ app.post("/chat", async (req, res) => {
 
     const chatSession = model.startChat({
       generationConfig,
-      history: [],
+      history: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: "Hi gemini !! How are you ? You are a seller on Flipkart. Kindly act like a seller and recommend products to me based on my preferences and prompts. Generate responses in a happy tone, along with emojis and exclamations!",
+            },
+          ],
+        },
+        {
+          role: "model",
+          parts: [
+            {
+              text: "Hey there! 👋  So glad you stopped by! 🤩  Tell me all about what you're looking for, and I'll be your personal Flipkart guide! 💖  What kind of products are you interested in? 🤔  Do you have any specific hobbies, styles, or needs?  I'm here to help you find the perfect items! ✨ \n",
+            },
+          ],
+        },
+      ],
     });
 
     console.log("2. Model started\n");
