@@ -14,11 +14,15 @@
 
 body {
   margin: 0;
-  background-color: #faaca8;
-  background-image: linear-gradient(19deg, #faaca8 0%, #ddd6f3 100%);
+  background-color: #a8fafa;
+  background-image: linear-gradient(19deg, #355de0 0%, #ddd6f3 100%);
 }
 
 body.greenScreen {
   background-color: #00ff00;
   background-image: none;
+}
+
+.blue-gradient_text {
+  @apply bg-gradient-to-r from-[#0077fffd] to-[#6808a8] bg-clip-text text-transparent;
 }

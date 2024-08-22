@@ -1,9 +1,29 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useChat } from "../hooks/useChat";
+import { useNavigate } from "react-router-dom";
+import io from "socket.io-client";
+
+const socket = io("http://localhost:5000");
 
 export const UI = ({ hidden, ...props }) => {
   const input = useRef();
+  const navigate = useNavigate();
   const { chat, loading, cameraZoomed, setCameraZoomed, message } = useChat();
+  const [recording, setRecording] = useState(false);
+  const [transcription, setTranscription] = useState("");
+  const [avatar, setAvatar] = useState("/animations.glb");
+
+  useEffect(() => {
+    // Listen for speech recognition results
+    socket.on("speech_recognized", (data) => {
+      setTranscription(data.text);
+    });
+
+    // Clean up the event listener on component unmount
+    return () => {
+      socket.off("speech_recognized");
+    };
+  }, []);
 
   const sendMessage = () => {
     const text = input.current.value;
@@ -12,6 +32,57 @@ export const UI = ({ hidden, ...props }) => {
       input.current.value = "";
     }
   };
+
+  const goToHome = () => {
+    navigate("/");
+  };
+
+  const startRecording = async () => {
+    if (!recording) {
+      setRecording(true);
+      setTranscription(""); // Clear previous transcription
+
+      try {
+        const response = await fetch("http://localhost:5000/start-recording", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          console.error("Failed to start recording.");
+        }
+      } catch (error) {
+        console.error("Error starting recording:", error);
+      }
+    } else {
+      stopRecording();
+    }
+  };
+
+  const stopRecording = async () => {
+    setRecording(false);
+    try {
+      const response = await fetch("http://localhost:5000/stop-recording", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        console.error("Failed to stop recording.");
+      }
+    } catch (error) {
+      console.error("Error stopping recording:", error);
+    }
+  };
+
+  const changeAvatar = (newAvatar) => {
+    setAvatar(newAvatar);
+  };
+
   if (hidden) {
     return null;
   }
@@ -19,14 +90,24 @@ export const UI = ({ hidden, ...props }) => {
   return (
     <>
       <div className="fixed top-0 left-0 right-0 bottom-0 z-10 flex justify-between p-4 flex-col pointer-events-none">
-        <div className="self-start backdrop-blur-md bg-white bg-opacity-50 p-4 rounded-lg">
-          <h1 className="font-black text-xl">My Virtual GF</h1>
-          <p>I will always love you ❤️</p>
+        <div className="absolute bg-white rounded-md shadow-md p-2">
+          <img
+            src="/flipkart.webp"
+            alt="Flipkart Logo"
+            className="w-32 h-auto hover:filter hover:brightness-110 transition-all duration-300"
+          />
         </div>
+
         <div className="w-full flex flex-col items-end justify-center gap-4">
           <button
+            onClick={goToHome}
+            className="pointer-events-auto bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-md"
+          >
+            <img src="/home.svg" alt="Home" className="w-6 h-6" />
+          </button>
+          <button
             onClick={() => setCameraZoomed(!cameraZoomed)}
-            className="pointer-events-auto bg-pink-500 hover:bg-pink-600 text-white p-4 rounded-md"
+            className="pointer-events-auto bg-gray-500 hover:bg-pink-600 text-white p-4 rounded-md"
           >
             {cameraZoomed ? (
               <svg
@@ -60,32 +141,23 @@ export const UI = ({ hidden, ...props }) => {
               </svg>
             )}
           </button>
+
           <button
-            onClick={() => {
-              const body = document.querySelector("body");
-              if (body.classList.contains("greenScreen")) {
-                body.classList.remove("greenScreen");
-              } else {
-                body.classList.add("greenScreen");
-              }
-            }}
-            className="pointer-events-auto bg-pink-500 hover:bg-pink-600 text-white p-4 rounded-md"
+            onClick={startRecording}
+            className={`pointer-events-auto text-white p-4 rounded-md ${
+              recording
+                ? "bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700"
+                : "bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600"
+            } flex items-center justify-center`}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-6 h-6"
-            >
-              <path
-                strokeLinecap="round"
-                d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
-              />
-            </svg>
+            {recording ? (
+              <img src="/mon.svg" alt="Recording" className="w-6 h-6" />
+            ) : (
+              <img src="/moff.svg" alt="Not recording" className="w-6 h-6" />
+            )}
           </button>
         </div>
+
         <div className="flex items-center gap-2 pointer-events-auto max-w-screen-sm w-full mx-auto">
           <input
             className="w-full placeholder:text-gray-800 placeholder:italic p-4 rounded-md bg-opacity-50 bg-white backdrop-blur-md"
@@ -100,12 +172,78 @@ export const UI = ({ hidden, ...props }) => {
           <button
             disabled={loading || message}
             onClick={sendMessage}
-            className={`bg-pink-500 hover:bg-pink-600 text-white p-4 px-10 font-semibold uppercase rounded-md ${
+            className={`bg-blue-500 hover:bg-blue-900 text-white p-4 px-10 font-semibold uppercase rounded-md ${
               loading || message ? "cursor-not-allowed opacity-30" : ""
             }`}
           >
             Send
           </button>
+        </div>
+
+        {recording && (
+          <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 p-4 bg-black bg-opacity-50 text-white rounded-md">
+            {transcription || "Listening..."}
+          </div>
+        )}
+
+
+        {/* Avatar Selection Panel */}
+        <div className="fixed top-1/2 left-4 transform -translate-y-1/2 flex flex-col items-center gap-3 p-2 bg-transparent rounded-md shadow-md">
+          <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
+            <button
+              onClick={() => changeAvatar("/avatar1.glb")}
+              className="w-20 h-20 bg-gray-200 rounded-full"
+            >
+              <img
+                src="tech_avatar.avif"
+                alt="Avatar 1"
+                className="w-20 h-20 object-cover rounded-full"
+              />
+            </button>
+            <span className="blue-gradient_text font-semibold">Tech AI</span>
+          </div>
+
+          <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
+            <button
+              onClick={() => changeAvatar("/avatar2.glb")}
+              className="w-20 h-20 bg-gray-200 rounded-full"
+            >
+              <img
+                src="/home_avatar.jpg"
+                alt="Avatar 2"
+                className="w-20 h-20 object-cover rounded-full"
+              />
+            </button>
+            <span className="blue-gradient_text font-semibold">Home AI</span>
+          </div>
+
+          <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
+            <button
+              onClick={() => changeAvatar("/avatar3.glb")}
+              className="w-20 h-20 bg-gray-200 rounded-full"
+            >
+              <img
+                src="/fashion_avatar.avif"
+                alt="Avatar 3"
+                className="w-20 h-20 object-cover rounded-full"
+              />
+            </button>
+            <span className="blue-gradient_text font-semibold">Fashion AI</span>
+          </div>
+
+          <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
+            <button
+              onClick={() => changeAvatar("/avatar4.glb")}
+              className="w-20 h-20 bg-gray-200 rounded-full"
+            >
+              <img
+                src="/gifts_avatar.jpg"
+                alt="Avatar 4"
+                className="w-20 h-20 object-cover rounded-full"
+              />
+            </button>
+            <span className="blue-gradient_text font-semibold">Gifts AI</span>
+          </div>
         </div>
       </div>
     </>
