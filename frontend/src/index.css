@@ -26,3 +26,18 @@ body.greenScreen {
 .blue-gradient_text {
   @apply bg-gradient-to-r from-[#0077fffd] to-[#6808a8] bg-clip-text text-transparent;
 }
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-pop {
+  animation: popIn 0.3s ease-out;
+}

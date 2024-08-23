@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useChat } from "../hooks/useChat";
 import { useNavigate } from "react-router-dom";
 import io from "socket.io-client";
+import fs from "fs";
 
 const socket = io("http://localhost:5000");
 
@@ -12,11 +13,28 @@ export const UI = ({ hidden, ...props }) => {
   const [recording, setRecording] = useState(false);
   const [transcription, setTranscription] = useState("");
   const [avatar, setAvatar] = useState("/animations.glb");
+  const [transcriptionsList, setTranscriptionsList] = useState([]);
+
+  useEffect(() => {
+    if (transcriptionsList.length === 0) {
+      setTranscriptionsList(["Hello, welcome to Flipkart!"]);
+    }
+  }, [transcriptionsList]);
 
   useEffect(() => {
     // Listen for speech recognition results
     socket.on("speech_recognized", (data) => {
       setTranscription(data.text);
+
+      setTranscriptionsList((prevList) => {
+        const newList = [data.text, ...prevList];
+        if (newList.length > 30) {
+          // Store the removed chats in another database
+          storeRemovedChats(newList.slice(30)); // Slice out the old chats
+          return newList.slice(0, 30); // Keep only the most recent 30
+        }
+        return newList;
+      });
     });
 
     // Clean up the event listener on component unmount
@@ -25,12 +43,31 @@ export const UI = ({ hidden, ...props }) => {
     };
   }, []);
 
+  const storeRemovedChats = async (chats) => {
+    try {
+      await fetch("http://localhost:5000/store-chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ chats }),
+      });
+    } catch (error) {
+      console.error("Error storing removed chats:", error);
+    }
+  };
+
   const sendMessage = () => {
     const text = input.current.value;
     if (!loading && !message) {
       chat(text);
       input.current.value = "";
     }
+  };
+
+  const sendVoiceText = (data) => {
+    console.log(data);
+    chat(data);
   };
 
   const goToHome = () => {
@@ -70,6 +107,11 @@ export const UI = ({ hidden, ...props }) => {
           "Content-Type": "application/json",
         },
       });
+
+      const data = await response.json();
+      const fileContent = data.file_content;
+      console.log("File Content:", fileContent);
+      sendVoiceText(fileContent);
 
       if (!response.ok) {
         console.error("Failed to stop recording.");
@@ -186,6 +228,75 @@ export const UI = ({ hidden, ...props }) => {
           </div>
         )}
 
+        {/* Recent Transcriptions Box */}
+        <div className="fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] opacity-80">
+          <div className="text-white text-lg font-semibold mb-2">
+            Flipkart Assistant
+          </div>
+          <div className="h-[260px] overflow-y-auto flex flex-col-reverse">
+            {/* Display messages from transcriptionsList */}
+            {transcriptionsList.map((text, index) => (
+              <div
+                key={`transcription-${index}`}
+                className={`p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop ${
+                  text === "Hello, welcome to Flipkart!"
+                    ? "self-start"
+                    : "self-end"
+                }`}
+              >
+                <div
+                  className={`relative p-3 rounded-md shadow-md max-w-[80%] ${
+                    text === "Hello, welcome to Flipkart!"
+                      ? "bg-green-300 ml-0"
+                      : "bg-white mr-0"
+                  } ${
+                    text === "Hello, welcome to Flipkart!" ? "ml-0" : "mr-auto"
+                  }`}
+                >
+                  <div
+                    className={`absolute ${
+                      text === "Hello, welcome to Flipkart!"
+                        ? "-left-2"
+                        : "-right-2"
+                    } w-0 h-0 border-t-4 border-r-transparent`}
+                  ></div>
+                  {text}
+                </div>
+              </div>
+            ))}
+
+            {/* {messages.map((msg, index) => (
+              <div
+                key={`chat-${index}`}
+                className={`p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop ${
+                  index % 2 === 0 ? "ml-20" : "mr-20"
+                }`}
+              >
+                <div
+                  className={`relative p-3 rounded-md shadow-md max-w-[80%] ${
+                    index % 2 === 0 ? "bg-white" : "bg-blue-200"
+                  }`}
+                >
+                  <div
+                    className={`absolute ${
+                      index % 2 === 0 ? "-left-2" : "-right-2"
+                    } w-0 h-0 border-t-4 border-r-transparent`}
+                  ></div>
+                  {msg}
+                </div>
+              </div>
+            ))} */}
+            {/* Loading indicator */}
+            {loading && (
+              <div className="p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop ml-20">
+                <div className="relative bg-gray-200 p-3 rounded-md shadow-md max-w-[80%]">
+                  <div className="absolute -bottom-2 left-4 w-0 h-0 border-t-4 border-r-transparent"></div>
+                  Loading...
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Avatar Selection Panel */}
         <div className="fixed top-1/2 left-4 transform -translate-y-1/2 flex flex-col items-center gap-3 p-2 bg-transparent rounded-md shadow-md">

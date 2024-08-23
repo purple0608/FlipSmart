@@ -1,49 +1,51 @@
 import os
+import requests
 from dotenv import load_dotenv
-import azure.cognitiveservices.speech as speechsdk
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import threading
-from flask_socketio import SocketIO, emit
+import azure.cognitiveservices.speech as speechsdk
+from flask_socketio import SocketIO
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS to allow requests from your React app
+# Configure CORS
 CORS(app, origins=["http://localhost:5173"])
 
-# Initialize SocketIO with CORS settings
+# Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins=["http://localhost:5173"])
 
 recognizer_thread = None
 stop_event = threading.Event()
 
+# In-memory variable to store recorded text
+recorded_text = ""
+recorded_text_lock = threading.Lock()
+
+def write_to_text(text):
+    global recorded_text
+    with recorded_text_lock:
+        recorded_text += text + '\n'
+
 def speak_to_microphone(api_key, region):
     global stop_event
-    # Create a speech configuration object
     speech_config = speechsdk.SpeechConfig(subscription=api_key, region=region)
     speech_config.speech_recognition_language = "en-US"
-    
-    # Set timeout durations on the speech_config object
     speech_config.set_property(speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "60000")
     speech_config.set_property(speechsdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "20000")
-
-    # Set up audio configuration for default microphone
     audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
-
-    # Create a speech recognizer
     speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
 
     print("Speak into your microphone. Say 'stop session' to end.")
-    
     while not stop_event.is_set():
-        # Recognize speech asynchronously
         speech_recognition_result = speech_recognizer.recognize_once_async().get()
 
         if speech_recognition_result.reason == speechsdk.ResultReason.RecognizedSpeech:
             recognized_text = speech_recognition_result.text
             print(f"Recognized: {recognized_text}")
-            socketio.emit('speech_recognized', {'text': recognized_text})  # Emit recognized text to the client
+            socketio.emit('speech_recognized', {'text': recognized_text})
+            write_to_text(recognized_text)
             if "stop session" in recognized_text.lower():
                 print("Session ended by user.")
                 break
@@ -66,20 +68,84 @@ def start_recording():
     else:
         return jsonify({"status": "Recording is already running"})
 
+# @app.route('/stop-recording', methods=['POST'])
+# def stop_recording():
+#     global stop_event, recorded_text
+#     stop_event.set()
+#     if recognizer_thread is not None:
+#         recognizer_thread.join()
+
+#     # After stopping the recording, send the stored text to Express backend
+#     try:
+#         response = requests.post('http://localhost:3000/chat', json={'message': recorded_text})
+#         if response.status_code == 200:
+#             # Clear the recorded text after successful send
+#             with recorded_text_lock:
+#                 recorded_text = ""
+#             return jsonify({"status": "Recording stopped and data sent to Express backend"})
+#         else:
+#             return jsonify({"status": "Failed to send data to Express backend"}), response.status_code
+
+#     except Exception as e:
+#         return jsonify({"status": f"Error: {str(e)}"}), 500
+
+# @app.route('/stop-recording', methods=['POST'])
+# def stop_recording():
+#     global stop_event, recorded_text
+#     stop_event.set()
+#     if recognizer_thread is not None:
+#         recognizer_thread.join()
+
+#     # After stopping the recording, write the recorded text to a file
+#     try:
+#         with open('recorded_text.txt', 'w') as file:
+#             file.write(recorded_text)
+        
+#         # Clear the recorded text after writing to file
+#         with recorded_text_lock:
+#             recorded_text = ""
+
+#         return jsonify({"status": "Recording stopped and text written to file"})
+#     except Exception as e:
+#         return jsonify({"status": f"Error: {str(e)}"}), 500
+
+
 @app.route('/stop-recording', methods=['POST'])
 def stop_recording():
-    global stop_event
+    global stop_event, recorded_text, recognizer_thread
+
     stop_event.set()
     if recognizer_thread is not None:
         recognizer_thread.join()
-    return jsonify({"status": "Recording stopped"})
+
+    try:
+        # Write the recorded text to a file
+        with open('recorded_text.txt', 'w') as file:
+            file.write(recorded_text)
+        
+        # Read the file content to include in the response
+        with open('recorded_text.txt', 'r') as file:
+            file_content = file.read()
+        
+        # Clear the recorded text after writing to file
+        with recorded_text_lock:
+            recorded_text = ""
+
+        # Return JSON response with file content
+        return jsonify({
+            "status": "Recording stopped and text written to file",
+            "file_content": file_content
+        })
+
+    except Exception as e:
+        return jsonify({"status": f"Error: {str(e)}"}), 500
+
 
 # Load environment variables from .env file
 load_dotenv()
 api_key = os.getenv("api_key")
 region = os.getenv("region")
 
-# Ensure the environment variables are set
 if not api_key or not region:
     raise ValueError("API key or region not found in environment variables.")
 

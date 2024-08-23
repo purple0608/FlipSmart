@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "flipkart-433216",
+  "private_key_id": "4285b9df754fe5752254ffa0453f258097b24134",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDpcGaKtd/vrzp3\nzdgz2XeaM3J3pki3ztT1ruOZX17ddUFzHdMaYB25N1sXGHplcffvj90UBCu4GRn9\nuyPysb+zikuLBss75B7mgMkR2DsXN8SHyoKTTb+7Vb58V1y91beachah5dKew8p4\nBxWGdWJ/xDkJvrUoL+pF57sHXDfEmbirsGbtw5IsLbEo9yUx5XTrO3soQn5TENR9\n/Eu9bRzumJgnPdKoHGUvwXZjG3i6/12DI7nFiT2PSw07qAQycrJsQMtd1zbm5Qd2\nhFDfRiOTM1A9SodFZFt+4KP0PIHsN+hrd0Uwf657ZIJIcFhE6xAvfpLvtpKIG5r6\nq3Kh9uoZAgMBAAECggEAB78ZlgWMTiUXAtICGFFhgHdagh7dYk/IUx6n50dqC7MN\nYOtcKE+eI47zKcMVD7VTxxTo9GthgzEpDW7sAIIhGeKvWFMZbti7z5t14K7Xt3uR\nJ45DCENFRytkoCDFiff+k7mwvNQLtIX2hnEPaALQn0EKQVj9Ob13pUoinkSeBfr2\n3du5hw2fS78Gaga5Y71JZIJO93Rhh1RY0GbYA3f/MIEskiZKG3xUj8kMr4rkeKI8\nPJVlc0hcgdvuA1OxPzuSTu11yzaZCgKi1/msNG9jppmHApMAYbpTyMm0+rJ4BXKI\n/+D+zOYPfqhgI+7yKxbPatt1Og50SVc84ru6JNoqMQKBgQD3ZQUOt7NP0O5scNBP\naBA+qQrTtFyUDR75K4Kfvt4+xzlJ5brNsLcMl7dyf/bh64BtV+VdkdzX8I1Ks+iq\nJODdcAczR2sxBJDqn/CfOGYyK9FsPb481hJQ8NwSuqBmaVg5oqMuXy9Qnt0Ip2LX\nsFR2T6q60FvXDc1j7gBR67oyKQKBgQDxjxxNltmBoKymBvLjwuB7agRWl7IaoNVZ\nOH3Ft4v9XzfnAi8pxypn40dSfl3yoMdpCqpuTvm28DXnxpEn2QDEJce69Yd5ZrW7\nqczWO6b3B+MHINq3iX3lwY1pLgVvMy0BpkGGn2GJKKkG/WmZqy1IMk8++heDM3Wb\nee56iCVWcQKBgQCk5+SQI+lVqdpT1Hs2gxJZAksiRRZ05a4gv10J6KuyQxAv7v8u\n/r11mmgA3cWOYHGx8SYF0iXYlxNHmVbcm0p8sKFMEC4mdXm3u7ckGu8cQFMPiLSX\nTsbUx0ia/2XN/ih9+qg1T+N1JQAHNbRQO8yBNKeEcUDWv++JzerOsIfjyQKBgQCh\nxnlrETL8GJJn4tF6bgIPRTJAl/mE0d/wj9/TsZhEiSeUQ6c4cJVa3CDhA5aBruG9\n3JHFrIia1wcTAa4nJLLZqn+4G0WurXXah96SP4MTgCmwlXVFZAR4AgdlwJeNIJXs\nu964fTdCN4P0FXVKoBSEfIUMJUvn52fFR4TKdTGkUQKBgC1VJDWjIL/vTqd2XSwO\nX2Al1UgHNW2J5dMn3X0KoudfwFGM4Btaf5+VRTTXn4kJGSOxkIlCnGTTOVhQnQgS\nevbeF9uxL3Ttp0TPA4byA29cjcOIFkReJF2J1n0PSg0mDbVfIyuS25FdWv878eJv\nJUtd+EpFtJgcn8Z4/HfApZYW\n-----END PRIVATE KEY-----\n",
+  "client_email": "ashutosh-pandey@flipkart-433216.iam.gserviceaccount.com",
+  "client_id": "100871759758057662840",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ashutosh-pandey%40flipkart-433216.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

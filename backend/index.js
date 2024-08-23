@@ -17,7 +17,7 @@ dotenv.config();
 
 // Initialize API keys and models
 const apiKey = "AIzaSyCmxupyVwQeUMFYM-ho2F5dQ9-gBKSEc2w"; // Replace with your actual API key
-const elevenLabsApiKey = "sk_799b23489515a01b5c5325e5d67a23a460a1a61537cae4f6";
+const elevenLabsApiKey = "sk_99312b0e877a42b64a03ab1212e020a3625fd9f6d3092c60";
 const voiceID = "kgG7dCoKCfLehAPWkJOE";
 
 const genAI = new GoogleGenerativeAI(apiKey);
@@ -45,7 +45,7 @@ const textToSpeech = async (textInput) => {
   try {
     // Call the Python script to generate audio
     await execPromise(
-      `python sample.py "${textInput}"`
+      `python3 sample2.py "${textInput}"`
     );
     console.log("Audio generated successfully!");
   } catch (error) {
@@ -78,6 +78,7 @@ app.get("/voices", async (req, res) => {
 
 app.post("/chat", async (req, res) => {
   const userMessage = req.body.message;
+  console.log(userMessage);
 
   if (!userMessage) {
     return res.send({
