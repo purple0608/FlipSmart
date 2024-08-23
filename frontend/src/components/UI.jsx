@@ -245,7 +245,7 @@ export const UI = ({ hidden, ...props }) => {
                 }`}
               >
                 <div
-                  className={`relative p-3 rounded-md shadow-md max-w-[80%] ${
+                  className={`relative p-3 rounded-md shadow-md max-w-[100%] ${
                     text === "Hello, welcome to Flipkart!"
                       ? "bg-green-300 ml-0"
                       : "bg-white mr-0"
@@ -286,17 +286,24 @@ export const UI = ({ hidden, ...props }) => {
                 </div>
               </div>
             ))} */}
-            {/* Loading indicator */}
+            {/* Loading indicator
             {loading && (
-              <div className="p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop ml-20">
+              <div className="p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop w-full flex justify-center">
                 <div className="relative bg-gray-200 p-3 rounded-md shadow-md max-w-[80%]">
                   <div className="absolute -bottom-2 left-4 w-0 h-0 border-t-4 border-r-transparent"></div>
                   Loading...
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         </div>
+
+        {/* Loading indicator positioned below the chat container */}
+        {loading && (
+          <div className="fixed bottom-[calc(20px+420px)] right-10 bg-gradient-to-r from-gray-200 to-gray-500 p-3 rounded-md shadow-lg w-[200px]">
+            <div className="relative">Loading...</div>
+          </div>
+        )}
 
         {/* Avatar Selection Panel */}
         <div className="fixed top-1/2 left-4 transform -translate-y-1/2 flex flex-col items-center gap-3 p-2 bg-transparent rounded-md shadow-md">
