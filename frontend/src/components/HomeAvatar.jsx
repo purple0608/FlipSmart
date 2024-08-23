@@ -6,7 +6,7 @@ import React, { useRef } from 'react'
 import { useGLTF } from '@react-three/drei'
 
 export function HomeAvatar(props) {
-  const { nodes, materials } = useGLTF('/avatar2.glb')
+  const { nodes, materials } = useGLTF('/models/avatar2.glb')
   return (
     <group {...props} dispose={null}>
       <primitive object={nodes.Hips} />

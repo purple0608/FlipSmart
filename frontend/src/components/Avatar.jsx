@@ -101,8 +101,8 @@ const corresponding = {
 let setupMode = false;
 
 export function Avatar(props) {
-  const { nodes, materials, scene } = useGLTF("/models/64f1a714fe61576b46f27ca2.glb");
-  //const { nodes, materials, scene } = useGLTF("/models/avatar1.glb");
+  // const { nodes, materials, scene } = useGLTF("/models/64f1a714fe61576b46f27ca2.glb");
+  const { nodes, materials, scene } = useGLTF("/models/avatar2.glb");
   const { message, onMessagePlayed, chat } = useChat();
   const [lipsync, setLipsync] = useState();
   const [audio, setAudio] = useState();

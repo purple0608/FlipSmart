@@ -1,8 +1,8 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useContext } from "react";
 import { useChat } from "../hooks/useChat";
 import { useNavigate } from "react-router-dom";
 import io from "socket.io-client";
-import fs from "fs";
+import { AvatarContext } from '../hooks/AvatarProvider'; // Import the custom hook
 
 const socket = io("http://localhost:5000");
 
@@ -12,8 +12,12 @@ export const UI = ({ hidden, ...props }) => {
   const { chat, loading, cameraZoomed, setCameraZoomed, message } = useChat();
   const [recording, setRecording] = useState(false);
   const [transcription, setTranscription] = useState("");
-  const [avatar, setAvatar] = useState("/animations.glb");
+  const { avatar, setAvatar } = useContext(AvatarContext);
   const [transcriptionsList, setTranscriptionsList] = useState([]);
+
+  const changeAvatar = (newAvatar) => {
+    setAvatar(newAvatar);
+  };
 
   useEffect(() => {
     if (transcriptionsList.length === 0) {
@@ -119,10 +123,6 @@ export const UI = ({ hidden, ...props }) => {
     } catch (error) {
       console.error("Error stopping recording:", error);
     }
-  };
-
-  const changeAvatar = (newAvatar) => {
-    setAvatar(newAvatar);
   };
 
   if (hidden) {
