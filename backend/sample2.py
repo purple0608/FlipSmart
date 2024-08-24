@@ -2,8 +2,7 @@ from google.cloud import texttospeech
 import argparse
 import os
 
-# Set up environment variable for Google Application Credentials
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = 'flipkart-433216-0fd99ffa43ad.json'
+
 
 def text_to_speech(t):
     # Instantiate a client
