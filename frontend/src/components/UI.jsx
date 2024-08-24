@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useContext } from "react";
 import { useChat } from "../hooks/useChat";
 import { useNavigate } from "react-router-dom";
 import io from "socket.io-client";
-import { AvatarContext } from '../hooks/AvatarProvider'; // Import the custom hook
+import { AvatarContext } from "../hooks/AvatarProvider";
 
 const socket = io("http://localhost:5000");
 
@@ -13,35 +13,57 @@ export const UI = ({ hidden, ...props }) => {
   const [recording, setRecording] = useState(false);
   const [transcription, setTranscription] = useState("");
   const { avatar, setAvatar } = useContext(AvatarContext);
-  const [transcriptionsList, setTranscriptionsList] = useState([]);
+  const [messages, setMessages] = useState(() => {
+    // Initialize messages from session storage
+    const storedMessages = sessionStorage.getItem("messages");
+    return storedMessages ? JSON.parse(storedMessages) : [
+      { text: "Hello! Welcome to Flipkart.", type: 'message' }
+    ];
+  });
+  const messageContainerRef = useRef(null);
 
   const changeAvatar = (newAvatar) => {
     setAvatar(newAvatar);
   };
 
   useEffect(() => {
-    if (transcriptionsList.length === 0) {
-      setTranscriptionsList(["Hello, welcome to Flipkart!"]);
+    if (message) {
+      setMessages((prevMessages) => {
+        const newMessages = [{ text: message.text, type: 'message' }, ...prevMessages];
+        // Store updated messages in session storage
+        sessionStorage.setItem("messages", JSON.stringify(newMessages));
+        return newMessages;
+      });
     }
-  }, [transcriptionsList]);
+  }, [message]);
+
+  // useEffect(() => {
+  //   if (transcription) {
+  //     setMessages((prevMessages) => [{ text: transcription, type: 'transcription' }, ...prevMessages]);
+  //   }
+  // }, [transcription]);
 
   useEffect(() => {
-    // Listen for speech recognition results
+    if (messageContainerRef.current) {
+      messageContainerRef.current.scrollBottom = messageContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  useEffect(() => {
     socket.on("speech_recognized", (data) => {
       setTranscription(data.text);
-
-      setTranscriptionsList((prevList) => {
-        const newList = [data.text, ...prevList];
-        if (newList.length > 30) {
-          // Store the removed chats in another database
-          storeRemovedChats(newList.slice(30)); // Slice out the old chats
-          return newList.slice(0, 30); // Keep only the most recent 30
+      setMessages((prevList) => {
+        const newList = [{ text: data.text, type: 'transcription' }, ...prevList];
+        if (newList.length > 50) {
+          storeRemovedChats(newList.slice(50));
+          // Clear list and reset session storage
+          sessionStorage.setItem("messages", JSON.stringify([]));
+          return newList.slice(0, 50);
         }
         return newList;
       });
     });
 
-    // Clean up the event listener on component unmount
     return () => {
       socket.off("speech_recognized");
     };
@@ -70,7 +92,6 @@ export const UI = ({ hidden, ...props }) => {
   };
 
   const sendVoiceText = (data) => {
-    console.log(data);
     chat(data);
   };
 
@@ -114,7 +135,6 @@ export const UI = ({ hidden, ...props }) => {
 
       const data = await response.json();
       const fileContent = data.file_content;
-      console.log("File Content:", fileContent);
       sendVoiceText(fileContent);
 
       if (!response.ok) {
@@ -228,84 +248,53 @@ export const UI = ({ hidden, ...props }) => {
           </div>
         )}
 
-        {/* Recent Transcriptions Box */}
         <div className="fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] opacity-80">
           <div className="text-white text-lg font-semibold mb-2">
             Flipkart Assistant
           </div>
-          <div className="h-[260px] overflow-y-auto flex flex-col-reverse">
-            {/* Display messages from transcriptionsList */}
-            {transcriptionsList.map((text, index) => (
+
+          <div
+            ref={messageContainerRef}
+            className="h-[320px] overflow-y-auto flex flex-col-reverse"
+          >
+            {messages.map((message, index) => (
               <div
-                key={`transcription-${index}`}
+                key={`message-${index}`}
                 className={`p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop ${
-                  text === "Hello, welcome to Flipkart!"
+                  message.type === 'transcription'
                     ? "self-start"
                     : "self-end"
                 }`}
               >
                 <div
                   className={`relative p-3 rounded-md shadow-md max-w-[100%] ${
-                    text === "Hello, welcome to Flipkart!"
+                    message.type === 'transcription'
                       ? "bg-green-300 ml-0"
                       : "bg-white mr-0"
                   } ${
-                    text === "Hello, welcome to Flipkart!" ? "ml-0" : "mr-auto"
+                    message.type === 'transcription' ? "ml-0" : "mr-auto"
                   }`}
                 >
                   <div
                     className={`absolute ${
-                      text === "Hello, welcome to Flipkart!"
+                      message.type === 'transcription'
                         ? "-left-2"
                         : "-right-2"
                     } w-0 h-0 border-t-4 border-r-transparent`}
                   ></div>
-                  {text}
+                  {message.text}
                 </div>
               </div>
             ))}
-
-            {/* {messages.map((msg, index) => (
-              <div
-                key={`chat-${index}`}
-                className={`p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop ${
-                  index % 2 === 0 ? "ml-20" : "mr-20"
-                }`}
-              >
-                <div
-                  className={`relative p-3 rounded-md shadow-md max-w-[80%] ${
-                    index % 2 === 0 ? "bg-white" : "bg-blue-200"
-                  }`}
-                >
-                  <div
-                    className={`absolute ${
-                      index % 2 === 0 ? "-left-2" : "-right-2"
-                    } w-0 h-0 border-t-4 border-r-transparent`}
-                  ></div>
-                  {msg}
-                </div>
-              </div>
-            ))} */}
-            {/* Loading indicator
-            {loading && (
-              <div className="p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop w-full flex justify-center">
-                <div className="relative bg-gray-200 p-3 rounded-md shadow-md max-w-[80%]">
-                  <div className="absolute -bottom-2 left-4 w-0 h-0 border-t-4 border-r-transparent"></div>
-                  Loading...
-                </div>
-              </div>
-            )} */}
           </div>
         </div>
 
-        {/* Loading indicator positioned below the chat container */}
         {loading && (
           <div className="fixed bottom-[calc(20px+420px)] right-10 bg-gradient-to-r from-gray-200 to-gray-500 p-3 rounded-md shadow-lg w-[200px]">
             <div className="relative">Loading...</div>
           </div>
         )}
 
-        {/* Avatar Selection Panel */}
         <div className="fixed top-1/2 left-4 transform -translate-y-1/2 flex flex-col items-center gap-3 p-2 bg-transparent rounded-md shadow-md">
           <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
             <button

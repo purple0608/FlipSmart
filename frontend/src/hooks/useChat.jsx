@@ -1,29 +1,34 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-const backendUrl = "http://localhost:3000";
-
+const backendUrl = 'http://localhost:3000';
 const ChatContext = createContext();
 
 export const ChatProvider = ({ children }) => {
-  const chat = async (message) => {
-    setLoading(true);
-    const data = await fetch(`${backendUrl}/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message }),
-    });
-    const resp = (await data.json()).messages;
-    setMessages((messages) => [...messages, ...resp]);
-    setLoading(false);
-  };
   const [messages, setMessages] = useState([]);
-  const [message, setMessage] = useState();
+  const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cameraZoomed, setCameraZoomed] = useState(true);
+
+  const chat = async (message) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${backendUrl}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      const data = await response.json();
+      const newMessages = data.messages;
+      setMessages((prevMessages) => [...prevMessages, ...newMessages]);
+    } catch (error) {
+      console.error('Error fetching chat:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onMessagePlayed = () => {
-    setMessages((messages) => messages.slice(1));
+    setMessages((prevMessages) => prevMessages.slice(1));
   };
 
   useEffect(() => {
@@ -38,6 +43,7 @@ export const ChatProvider = ({ children }) => {
     <ChatContext.Provider
       value={{
         chat,
+        messages,
         message,
         onMessagePlayed,
         loading,
@@ -53,7 +59,7 @@ export const ChatProvider = ({ children }) => {
 export const useChat = () => {
   const context = useContext(ChatContext);
   if (!context) {
-    throw new Error("useChat must be used within a ChatProvider");
+    throw new Error('useChat must be used within a ChatProvider');
   }
   return context;
 };
