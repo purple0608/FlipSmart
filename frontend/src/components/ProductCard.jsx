@@ -31,7 +31,7 @@ const ProductCard = ({ title, price, rating, description, imgSrc }) => {
     setClicks(productData.clicks);
   }, [title]);
 
-  const handleClick = () => {
+  const handleClick = async () => {
     // Update the clicks state
     const newClicks = clicks + 1;
     setClicks(newClicks);
@@ -50,6 +50,19 @@ const ProductCard = ({ title, price, rating, description, imgSrc }) => {
 
     // Store in cookies
     setCookie(title, JSON.stringify(productData), 7); // Store for 7 days
+
+    // Call the backend API to update the product data
+    try {
+      await fetch('http://localhost:3000/update-product-data', { // Adjust URL as needed
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ productData }),
+      });
+    } catch (error) {
+      console.error('Error updating product data:', error);
+    }
 
     // Optionally, log to the console for verification
     console.log(productData);

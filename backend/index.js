@@ -7,6 +7,10 @@ import { readFile } from 'fs/promises';
 import express from "express";
 import { promises as fs } from "fs";
 import OpenAI from "openai";
+import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 import {
   GoogleGenerativeAI,
   HarmCategory,
@@ -19,6 +23,12 @@ dotenv.config();
 const apiKey = "AIzaSyCmxupyVwQeUMFYM-ho2F5dQ9-gBKSEc2w"; // Replace with your actual API key
 const elevenLabsApiKey = "sk_99312b0e877a42b64a03ab1212e020a3625fd9f6d3092c60";
 const voiceID = "kgG7dCoKCfLehAPWkJOE";
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Define the path to the product data file
+const filePath = path.join(__dirname, 'productData.json');
 
 const genAI = new GoogleGenerativeAI(apiKey);
 const model = genAI.getGenerativeModel({
@@ -36,10 +46,102 @@ const generationConfig = {
 const app = express();
 app.use(express.json());
 app.use(cors());
+app.use(cookieParser());
 const port = 3000;
+
+app.use(express.static(__dirname));
 
 // Helper functions
 const execPromise = promisify(exec);
+
+app.get('/api/productData', (req, res) => {
+  res.sendFile(path.join(__dirname, 'productData.json'));
+});
+
+// Helper function to parse cookie data
+const parseCookies = (cookieHeader) => {
+  return cookieHeader
+    .split('; ')
+    .map(cookie => cookie.split('='))
+    .reduce((acc, [name, value]) => {
+      acc[name] = decodeURIComponent(value);
+      return acc;
+    }, {});
+};
+
+
+// Endpoint to get product data from cookies
+app.get('/get-product-data', (req, res) => {
+  // Extract cookies from the request
+  const cookies = parseCookies(req.headers.cookie || '');
+
+  // Convert cookies to product data
+  const products = Object.keys(cookies).map(key => {
+    try {
+      return JSON.parse(cookies[key]);
+    } catch (e) {
+      return null; // In case of invalid JSON in cookie
+    }
+  }).filter(product => product !== null);
+
+  res.json(products);
+});
+
+
+// SSE endpoint to push updates to clients
+app.get('/api/updates', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const sendData = () => {
+    fs.readFile(path.join(__dirname, 'productData.json'), 'utf8', (err, data) => {
+      if (err) {
+        console.error('Error reading productData.json:', err);
+        return;
+      }
+      res.write(`data: ${data}\n\n`);
+    });
+  };
+
+  sendData(); // Send initial data
+
+  // Watch for changes in productData.json and push updates
+  fs.watchFile(path.join(__dirname, 'productData.json'), () => {
+    sendData();
+  });
+});
+
+
+// Endpoint to update product data
+app.post('/update-product-data', async (req, res) => {
+  try {
+    const { productData } = req.body;
+
+    // Read the existing data from the file
+    let existingData = {};
+    try {
+      const data = await fs.readFile(filePath, 'utf8');
+      existingData = JSON.parse(data);
+    } catch (error) {
+      // If the file doesn't exist or is empty, start with an empty object
+      if (error.code !== 'ENOENT') throw error;
+    }
+
+    // Update the existing data with new product data
+    existingData[productData.title] = productData;
+
+    // Write the updated data to the file
+    await fs.writeFile(filePath, JSON.stringify(existingData, null, 2), 'utf8');
+
+    res.send({ success: true });
+  } catch (error) {
+    console.error('Error updating product data:', error);
+    res.status(500).send({ error: 'Failed to update product data' });
+  }
+});
+
+
 
 const textToSpeech = async (textInput) => {
   try {

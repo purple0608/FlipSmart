@@ -1,7 +1,15 @@
+/* Add these lines to your main CSS file */
+/* In your src/index.css or equivalent global CSS file */
+@import 'slick-carousel/slick/slick.css';
+@import 'slick-carousel/slick/slick-theme.css';
+
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+
 
 :root {
   --leva-sizes-rootWidth: 340px;
@@ -40,4 +48,10 @@ body.greenScreen {
 
 .animate-pop {
   animation: popIn 0.3s ease-out;
+}
+/* In your CSS file or CSS module */
+.text-gradient {
+  background: linear-gradient(to right, #001f3f, #ffffff); /* Dark blue to white */
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

@@ -3,6 +3,7 @@ import { useChat } from "../hooks/useChat";
 import { useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 import { AvatarContext } from "../hooks/AvatarProvider";
+import TopProducts from "./TopProducts";
 
 const socket = io("http://localhost:5000");
 
@@ -16,9 +17,9 @@ export const UI = ({ hidden, ...props }) => {
   const [messages, setMessages] = useState(() => {
     // Initialize messages from session storage
     const storedMessages = sessionStorage.getItem("messages");
-    return storedMessages ? JSON.parse(storedMessages) : [
-      { text: "Hello! Welcome to Flipkart.", type: 'message' }
-    ];
+    return storedMessages
+      ? JSON.parse(storedMessages)
+      : [{ text: "Hello! Welcome to Flipkart.", type: "message" }];
   });
   const messageContainerRef = useRef(null);
 
@@ -29,7 +30,10 @@ export const UI = ({ hidden, ...props }) => {
   useEffect(() => {
     if (message) {
       setMessages((prevMessages) => {
-        const newMessages = [{ text: message.text, type: 'message' }, ...prevMessages];
+        const newMessages = [
+          { text: message.text, type: "message" },
+          ...prevMessages,
+        ];
         // Store updated messages in session storage
         sessionStorage.setItem("messages", JSON.stringify(newMessages));
         return newMessages;
@@ -37,15 +41,10 @@ export const UI = ({ hidden, ...props }) => {
     }
   }, [message]);
 
-  // useEffect(() => {
-  //   if (transcription) {
-  //     setMessages((prevMessages) => [{ text: transcription, type: 'transcription' }, ...prevMessages]);
-  //   }
-  // }, [transcription]);
-
   useEffect(() => {
     if (messageContainerRef.current) {
-      messageContainerRef.current.scrollBottom = messageContainerRef.current.scrollHeight;
+      messageContainerRef.current.scrollTop =
+        messageContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
@@ -53,7 +52,10 @@ export const UI = ({ hidden, ...props }) => {
     socket.on("speech_recognized", (data) => {
       setTranscription(data.text);
       setMessages((prevList) => {
-        const newList = [{ text: data.text, type: 'transcription' }, ...prevList];
+        const newList = [
+          { text: data.text, type: "transcription" },
+          ...prevList,
+        ];
         if (newList.length > 50) {
           storeRemovedChats(newList.slice(50));
           // Clear list and reset session storage
@@ -152,6 +154,13 @@ export const UI = ({ hidden, ...props }) => {
   return (
     <>
       <div className="fixed top-0 left-0 right-0 bottom-0 z-10 flex justify-between p-4 flex-col pointer-events-none">
+        {/* Top Products Section */}
+        <div className="fixed left-40 top-4 z-20 hidden lg:block">
+          {" "}
+          {/* Adjust `left` and `top` as needed */}
+          <TopProducts />
+        </div>
+
         <div className="absolute bg-white rounded-md shadow-md p-2">
           <img
             src="/flipkart.webp"
@@ -248,7 +257,7 @@ export const UI = ({ hidden, ...props }) => {
           </div>
         )}
 
-        <div className="fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] opacity-80">
+        <div className="fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] z-20">
           <div className="text-white text-lg font-semibold mb-2">
             Flipkart Assistant
           </div>
@@ -261,25 +270,19 @@ export const UI = ({ hidden, ...props }) => {
               <div
                 key={`message-${index}`}
                 className={`p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop ${
-                  message.type === 'transcription'
-                    ? "self-start"
-                    : "self-end"
+                  message.type === "transcription" ? "self-start" : "self-end"
                 }`}
               >
                 <div
                   className={`relative p-3 rounded-md shadow-md max-w-[100%] ${
-                    message.type === 'transcription'
+                    message.type === "transcription"
                       ? "bg-green-300 ml-0"
                       : "bg-white mr-0"
-                  } ${
-                    message.type === 'transcription' ? "ml-0" : "mr-auto"
-                  }`}
+                  } ${message.type === "transcription" ? "ml-0" : "mr-auto"}`}
                 >
                   <div
                     className={`absolute ${
-                      message.type === 'transcription'
-                        ? "-left-2"
-                        : "-right-2"
+                      message.type === "transcription" ? "-left-2" : "-right-2"
                     } w-0 h-0 border-t-4 border-r-transparent`}
                   ></div>
                   {message.text}

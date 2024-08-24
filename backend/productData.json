@@ -1,0 +1,58 @@
+{
+  "Product 3": {
+    "title": "Product 3",
+    "price": "$299",
+    "rating": "4.7/5",
+    "description": "Premium product with top-notch performance.",
+    "clicks": 5
+  },
+  "Product 2": {
+    "title": "Product 2",
+    "price": "$199",
+    "rating": "4.0/5",
+    "description": "Affordable and reliable.",
+    "clicks": 1
+  },
+  "Product 1": {
+    "title": "Product 1",
+    "price": "$99",
+    "rating": "4.5/5",
+    "description": "High-quality product with excellent features.",
+    "clicks": 1
+  },
+  "Product 4": {
+    "title": "Product 4",
+    "price": "$399",
+    "rating": "4.8/5",
+    "description": "Luxury item with exceptional quality.",
+    "clicks": 4
+  },
+  "Product 6": {
+    "title": "Product 6",
+    "price": "$199",
+    "rating": "4.0/5",
+    "description": "Affordable and reliable.",
+    "clicks": 2
+  },
+  "Product 5": {
+    "title": "Product 5",
+    "price": "$99",
+    "rating": "4.5/5",
+    "description": "High-quality product with excellent features.",
+    "clicks": 4
+  },
+  "Product 8": {
+    "title": "Product 8",
+    "price": "$399",
+    "rating": "4.8/5",
+    "description": "Luxury item with exceptional quality.",
+    "clicks": 1
+  },
+  "Product 7": {
+    "title": "Product 7",
+    "price": "$299",
+    "rating": "4.7/5",
+    "description": "Premium product with top-notch performance.",
+    "clicks": 1
+  }
+}
