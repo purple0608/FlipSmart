@@ -4,7 +4,7 @@ const Header = () => {
   return (
     <header className="bg-blue-600 p-4 flex flex-col sm:flex-row items-center justify-between">
       <div className="logo">
-        <img src="flipkart.webp" alt="Logo" className="w-40" />
+        <img src="flipkart.png" alt="Logo" className="w-40" />
       </div>
       <nav>
         <ul className="flex space-x-10 text-white text-lg">
