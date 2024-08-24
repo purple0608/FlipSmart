@@ -29,7 +29,7 @@ const TopProducts = () => {
   return (
     <div className="p-6 bg-transparent" style={{ marginRight: '850px'}}> {/* Adjust marginLeft for sidebar */}
       <h2 className="text-2xl p-4 font-semibold text-blue-600 bg-gradient-to-r from-blue-800 to-purple-800 bg-clip-text text-transparent">
-        Top Products
+        Top Product Recommendations
       </h2>
       {topProducts.length === 0 ? (
         <p className="text-center text-gray-500">No products available</p>

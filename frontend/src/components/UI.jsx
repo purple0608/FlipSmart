@@ -213,20 +213,7 @@ export const UI = ({ hidden, ...props }) => {
             )}
           </button>
 
-          <button
-            onClick={startRecording}
-            className={`pointer-events-auto text-white p-4 rounded-md ${
-              recording
-                ? "bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700"
-                : "bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600"
-            } flex items-center justify-center`}
-          >
-            {recording ? (
-              <img src="/mon.svg" alt="Recording" className="w-6 h-6" />
-            ) : (
-              <img src="/moff.svg" alt="Not recording" className="w-6 h-6" />
-            )}
-          </button>
+  
         </div>
 
         <div className="flex items-center gap-2 pointer-events-auto max-w-screen-sm w-full mx-auto">
@@ -249,6 +236,20 @@ export const UI = ({ hidden, ...props }) => {
           >
             Send
           </button>
+          <button
+            onClick={startRecording}
+            className={`pointer-events-auto text-white p-4 rounded-md ${
+              recording
+                ? "bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700"
+                : "bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600"
+            } flex items-center justify-center`}
+          >
+            {recording ? (
+              <img src="/mon.svg" alt="Recording" className="w-6 h-6" />
+            ) : (
+              <img src="/moff.svg" alt="Not recording" className="w-6 h-6" />
+            )}
+          </button>
         </div>
 
         {recording && (
@@ -259,7 +260,7 @@ export const UI = ({ hidden, ...props }) => {
 
         <div className="fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] z-20">
           <div className="text-white text-lg font-semibold mb-2">
-            Flipkart Assistant
+            Flipkart Assistant: FlipSmart
           </div>
 
           <div

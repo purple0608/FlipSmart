@@ -32,13 +32,13 @@ const filePath = path.join(__dirname, 'productData.json');
 
 const genAI = new GoogleGenerativeAI(apiKey);
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: "gemini-1.5-pro",
 });
 const generationConfig = {
   temperature: 1,
   topP: 0.95,
   topK: 64,
-  maxOutputTokens: 512,
+  maxOutputTokens: 196,
   responseMimeType: "text/plain",
 };
 
@@ -235,7 +235,7 @@ app.post("/chat", async (req, res) => {
           parts: [
             {
               text: `Hi gemini !! How are you ? You have to play the role of a seller on Flipkart. Kindly act like a seller and recommend products to me based on my preferences and prompts. Generate responses in a happy tone, in a human-like fashion and use umm, ahh, okay like a normal person and take pauses, along with punctuations and exclamations!
-                    *** Generate responses that sound natural and conversational, avoiding robotic or scripted speech. Do not include *, &, :, special characters. ***
+                    *** Generate responses that sound natural and conversational, avoiding robotic or scripted speech. Strictly do not make any part of the response bold or italic. ***
                     *** Ensure accuracy and provide detailed product knowledge in responses.  ***
                     *** Maintain context and a consistent seller persona, even in long conversations. ***
                     *** Address customer concerns and objections effectively. ***`,

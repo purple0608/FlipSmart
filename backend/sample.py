@@ -3,7 +3,7 @@ from elevenlabs.client import ElevenLabs
 import argparse
 
 client = ElevenLabs(
-  api_key='sk_70012336d5602235ba238e0a5aa6eae988401802c17ce3bc', # Defaults to ELEVEN_API_KEY
+  api_key='sk_34302a622119c5d84520c5fe2bcbf9ea6d1077c0820c3177', # Defaults to ELEVEN_API_KEY
 )
 
 def text_to_speech(t):
