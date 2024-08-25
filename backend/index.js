@@ -30,7 +30,7 @@ const __dirname = path.dirname(__filename);
 // Define the path to the product data file
 const filePath = path.join(__dirname, 'productData.json');
 
-const genAI = new GoogleGenerativeAI(apiKey);
+const genAI = new GoogleGenerativeAI("AIzaSyCmxupyVwQeUMFYM-ho2F5dQ9-gBKSEc2w");
 const model = genAI.getGenerativeModel({
   model: "gemini-1.5-pro",
 });

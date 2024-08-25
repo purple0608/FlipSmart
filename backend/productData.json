@@ -18,14 +18,14 @@
     "price": "$99",
     "rating": "4.5/5",
     "description": "High-quality product with excellent features.",
-    "clicks": 1
+    "clicks": 14
   },
   "Product 4": {
     "title": "Product 4",
     "price": "$399",
     "rating": "4.8/5",
     "description": "Luxury item with exceptional quality.",
-    "clicks": 4
+    "clicks": 12
   },
   "Product 6": {
     "title": "Product 6",

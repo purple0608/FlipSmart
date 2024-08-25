@@ -1,2 +1,3 @@
-Show me utensils till 1000.
+Hello Flipkart.
+Show me shoes.
 Thank you.

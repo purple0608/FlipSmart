@@ -18,3 +18,7 @@ Thumbs.db
 # IDE/editor specific files
 .vscode/
 .idea/
+
+backend/flipkart-433216-53e525a6bca4.json
+backend/.env
+frontend/.env
