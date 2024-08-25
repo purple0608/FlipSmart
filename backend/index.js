@@ -183,46 +183,27 @@ app.post("/chat", async (req, res) => {
   console.log(userMessage);
 
   if (!userMessage) {
+      const fileName = `output_audio.mp3`;
+      const textInput = "Hi i am meera , I am your flipsmart assistant. Ask me anything , I will be happy to help you.";
+      console.log(textInput);
+      await textToSpeech(textInput);
+
+    
+  
+
     return res.send({
       messages: [
         {
-          text: "Hey dear... How was your day?",
-          audio: await audioFileToBase64("audios/intro_0.wav"),
-          lipsync: await readJsonTranscript("audios/intro_0.json"),
+          text: "Hi i am meera , I am your flipsmart assistant. Ask me anything , I will be happy to help you.",
+          audio:  await audioFileToBase64(fileName),
           facialExpression: "smile",
           animation: "Talking_1",
-        },
-        {
-          text: "I missed you so much... Please don't go for so long!",
-          audio: await audioFileToBase64("audios/intro_1.wav"),
-          lipsync: await readJsonTranscript("audios/intro_1.json"),
-          facialExpression: "sad",
-          animation: "Crying",
         },
       ],
     });
   }
 
-  if (!elevenLabsApiKey || !apiKey) {
-    return res.send({
-      messages: [
-        {
-          text: "Please my dear, don't forget to add your API keys!",
-          audio: await audioFileToBase64("audios/api_0.wav"),
-          lipsync: await readJsonTranscript("audios/api_0.json"),
-          facialExpression: "angry",
-          animation: "Angry",
-        },
-        {
-          text: "You don't want to ruin Wawa Sensei with a crazy bill, right?",
-          audio: await audioFileToBase64("audios/api_1.wav"),
-          lipsync: await readJsonTranscript("audios/api_1.json"),
-          facialExpression: "smile",
-          animation: "Laughing",
-        },
-      ],
-    });
-  }
+
 
   try {
     console.log("1. Chat started\n");
@@ -401,5 +382,5 @@ app.post("/chat", async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Virtual Girlfriend listening on port ${port}`);
+  console.log(`Flipsmart assistant listening on port ${port}`);
 });
