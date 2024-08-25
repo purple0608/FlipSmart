@@ -21,7 +21,7 @@ The entire software majorly consists of two parts:
 ##### CLONE THE REPOSITORY
 
 ```
-git clone https://github.com/Ashutoshpandey29/WBAN_HEALTHCARE.git
+git clone [https://github.com/purple0608/FlipSmart.git]
 cd your-repo
 ```
 
