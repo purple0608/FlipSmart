@@ -1,18 +1,48 @@
-import { useRef, useState, useEffect, useContext } from "react";
-import { useChat } from "../hooks/useChat";
+import { useRef, useState, useEffect, useCallback, useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { useChat } from "../hooks/useChat";
+import { OrbitControls } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
 import io from "socket.io-client";
+import "../index.css";
+
 import { AvatarContext } from "../hooks/AvatarProvider";
 import TopProducts from "./TopProducts";
 
-const socket = io("http://localhost:5000");
+const socket = io("http://127.0.0.1:5000", {
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+});
+
+// Debug socket connection
+socket.on('connect', () => console.log('Socket connected'));
+socket.on('connect_error', (err) => console.error('Socket connection error:', err));
 
 export const UI = ({ hidden, ...props }) => {
   const input = useRef();
   const navigate = useNavigate();
-  const { chat, loading, cameraZoomed, setCameraZoomed, message } = useChat();
+  const { 
+    chat, 
+    message, 
+    onMessagePlayed, 
+    loading, 
+    cameraZoomed, 
+    setCameraZoomed, 
+    isAvatarSpeaking,
+    chatHistory,
+    clearHistory,
+    loadMoreHistory,
+    isLoadingHistory
+  } = useChat();
+  
   const [recording, setRecording] = useState(false);
+  const [processingAudio, setProcessingAudio] = useState(false);
   const [transcription, setTranscription] = useState("");
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [usingClientTTS, setUsingClientTTS] = useState(false);
+  
+  const messageContainerRef = useRef();
+  const chatEndRef = useRef();
   const { avatar, setAvatar } = useContext(AvatarContext);
   const [messages, setMessages] = useState(() => {
     // Initialize messages from session storage
@@ -21,32 +51,206 @@ export const UI = ({ hidden, ...props }) => {
       ? JSON.parse(storedMessages)
       : [{ text: "Hello! Welcome to Flipkart.", type: "message" }];
   });
-  const messageContainerRef = useRef(null);
+
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey && input.current.value) {
+      e.preventDefault();
+      const messageText = input.current.value.trim();
+      if (messageText) {
+        chat(messageText);
+        input.current.value = "";
+        scrollToBottom();
+      }
+    }
+  };
+
+  const sendVoiceText = (text) => {
+    if (!text || text.trim() === "") {
+      console.log("Empty voice text, not sending.");
+      setProcessingAudio(false);
+      return;
+    }
+
+    console.log("Sending voice text:", text);
+    // Don't call setTranscription again as we've already set it in stopRecording
+    chat(text);
+    scrollToBottom();
+    setProcessingAudio(false);
+  };
+
+  const storeRemovedChats = async (chats) => {
+    try {
+      await fetch("http://localhost:5000/store-chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ chats }),
+      });
+    } catch (error) {
+      console.error("Error storing removed chats:", error);
+    }
+  };
+
+  const sendMessage = () => {
+    if (input.current && input.current.value) {
+      const messageText = input.current.value.trim();
+      if (messageText) {
+        chat(messageText);
+        input.current.value = "";
+        scrollToBottom();
+      }
+    }
+  };
+
+  const handleMessageSubmit = (e) => {
+    e.preventDefault();
+    if (!loading) { 
+      sendMessage();
+    }
+  };
+
+  const goToHome = () => {
+    navigate("/");
+  };
+
+  const startRecording = async () => {
+    // Don't record when avatar is speaking
+    if (isAvatarSpeaking) {
+      console.log("Avatar is speaking, please wait...");
+      return;
+    }
+
+    // Don't allow starting a new recording if we're currently processing audio
+    if (processingAudio) {
+      console.log("Still processing previous audio, please wait...");
+      return;
+    }
+
+    if (!recording) {
+      console.log("Starting recording...");
+      setRecording(true);
+      setTranscription(""); // Clear previous transcription
+
+      try {
+        // Try both localhost and 127.0.0.1 as sometimes localhost doesn't resolve properly
+        const url = "http://127.0.0.1:5000/start-recording";
+        console.log("Connecting to:", url);
+        
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          console.error("Failed to start recording:", response.status);
+          setRecording(false);
+        } else {
+          console.log("Recording started successfully");
+        }
+      } catch (error) {
+        console.error("Error starting recording:", error);
+        setRecording(false);
+      }
+    } else {
+      stopRecording();
+    }
+  };
+
+  const stopRecording = async () => {
+    setRecording(false);
+    // Set processing state to prevent new recording attempts
+    setProcessingAudio(true);
+    
+    try {
+      console.log("Stopping recording and getting transcription...");
+      const url = "http://127.0.0.1:5000/stop-recording";
+      console.log("Connecting to:", url);
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        console.error("Failed to stop recording.");
+        return;
+      }
+
+      const data = await response.json();
+      const fileContent = data.file_content;
+      console.log("Received transcription:", fileContent);
+      
+      // Update transcription immediately for display
+      setTranscription(fileContent);
+      
+      // Only send if we have actual content
+      if (fileContent && fileContent.trim() !== "") {
+        // Wait a bit to allow the user to see the transcription
+        setTimeout(() => {
+          sendVoiceText(fileContent);
+        }, 500);
+      } else {
+        console.log("No voice content to send");
+        setProcessingAudio(false);
+      }
+    } catch (error) {
+      console.error("Error stopping recording:", error);
+      setProcessingAudio(false);
+    }
+  };
 
   const changeAvatar = (newAvatar) => {
     setAvatar(newAvatar);
   };
 
+  // Listen for messages from the chatbot
   useEffect(() => {
-    if (message) {
-      setMessages((prevMessages) => {
-        const newMessages = [
-          { text: message.text, type: "message" },
-          ...prevMessages,
-        ];
-        // Store updated messages in session storage
-        sessionStorage.setItem("messages", JSON.stringify(newMessages));
-        return newMessages;
-      });
+    if (message && chatHistory.length > 0) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      
+      // Check if the current message is using client TTS
+      setUsingClientTTS(message.usingClientTTS === true);
     }
-  }, [message]);
+  }, [chatHistory, message]);
+
+  // Reset client TTS flag when avatar stops speaking
+  useEffect(() => {
+    if (!isAvatarSpeaking) {
+      setUsingClientTTS(false);
+    }
+  }, [isAvatarSpeaking]);
+
+  const scrollToBottom = useCallback(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    if (!messageContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messageContainerRef.current;
+    // Show button when scrolled up more than 100px from bottom
+    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 100;
+    setShowScrollButton(isScrolledUp);
+    
+    // Check if we need to load more history when scrolled to top
+    if (scrollTop < 50 && chatHistory.length > 10 && !isLoadingHistory) {
+      loadMoreHistory();
+    }
+  }, [chatHistory.length, isLoadingHistory, loadMoreHistory]);
 
   useEffect(() => {
-    if (messageContainerRef.current) {
-      messageContainerRef.current.scrollTop =
-        messageContainerRef.current.scrollHeight;
+    const messageContainer = messageContainerRef.current;
+    if (messageContainer) {
+      messageContainer.addEventListener('scroll', handleScroll);
+      return () => messageContainer.removeEventListener('scroll', handleScroll);
     }
-  }, [messages]);
+  }, [handleScroll]);
 
   useEffect(() => {
     socket.on("speech_recognized", (data) => {
@@ -70,82 +274,6 @@ export const UI = ({ hidden, ...props }) => {
       socket.off("speech_recognized");
     };
   }, []);
-
-  const storeRemovedChats = async (chats) => {
-    try {
-      await fetch("http://localhost:5000/store-chats", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ chats }),
-      });
-    } catch (error) {
-      console.error("Error storing removed chats:", error);
-    }
-  };
-
-  const sendMessage = () => {
-    const text = input.current.value;
-    if (!loading && !message) {
-      chat(text);
-      input.current.value = "";
-    }
-  };
-
-  const sendVoiceText = (data) => {
-    chat(data);
-  };
-
-  const goToHome = () => {
-    navigate("/");
-  };
-
-  const startRecording = async () => {
-    if (!recording) {
-      setRecording(true);
-      setTranscription(""); // Clear previous transcription
-
-      try {
-        const response = await fetch("http://localhost:5000/start-recording", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          console.error("Failed to start recording.");
-        }
-      } catch (error) {
-        console.error("Error starting recording:", error);
-      }
-    } else {
-      stopRecording();
-    }
-  };
-
-  const stopRecording = async () => {
-    setRecording(false);
-    try {
-      const response = await fetch("http://localhost:5000/stop-recording", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      const data = await response.json();
-      const fileContent = data.file_content;
-      sendVoiceText(fileContent);
-
-      if (!response.ok) {
-        console.error("Failed to stop recording.");
-      }
-    } catch (error) {
-      console.error("Error stopping recording:", error);
-    }
-  };
 
   if (hidden) {
     return null;
@@ -221,28 +349,25 @@ export const UI = ({ hidden, ...props }) => {
             className="w-full placeholder:text-gray-800 placeholder:italic p-4 rounded-md bg-opacity-50 bg-white backdrop-blur-md"
             placeholder="Type a message..."
             ref={input}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                sendMessage();
-              }
-            }}
+            onKeyDown={handleKeyPress}
           />
           <button
-            disabled={loading || message}
+            disabled={loading || isAvatarSpeaking}
             onClick={sendMessage}
             className={`bg-blue-500 hover:bg-blue-900 text-white p-4 px-10 font-semibold uppercase rounded-md ${
-              loading || message ? "cursor-not-allowed opacity-30" : ""
+              (loading || isAvatarSpeaking) ? "cursor-not-allowed opacity-30" : ""
             }`}
           >
             Send
           </button>
           <button
             onClick={startRecording}
+            disabled={processingAudio || loading || isAvatarSpeaking}
             className={`pointer-events-auto text-white p-4 rounded-md ${
               recording
                 ? "bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700"
                 : "bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600"
-            } flex items-center justify-center`}
+            } ${(processingAudio || loading || isAvatarSpeaking) ? "opacity-50 cursor-not-allowed" : ""} flex items-center justify-center`}
           >
             {recording ? (
               <img src="/mon.svg" alt="Recording" className="w-6 h-6" />
@@ -252,44 +377,91 @@ export const UI = ({ hidden, ...props }) => {
           </button>
         </div>
 
-        {recording && (
+        {(recording || processingAudio) && (
           <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 p-4 bg-black bg-opacity-50 text-white rounded-md">
-            {transcription || "Listening..."}
+            {processingAudio ? "Processing..." : transcription || "Listening..."}
           </div>
         )}
 
-        <div className="fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] z-20">
+        <div className="fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] z-20 pointer-events-auto">
           <div className="text-white text-lg font-semibold mb-2">
             Flipkart Assistant: FlipSmart
           </div>
 
+          {/* Chat history container */}
           <div
             ref={messageContainerRef}
-            className="h-[320px] overflow-y-auto flex flex-col-reverse"
+            className="h-[320px] overflow-y-scroll flex flex-col custom-scrollbar px-2 pointer-events-auto"
+            style={{
+              scrollBehavior: 'smooth',
+              scrollbarWidth: 'thin', /* Firefox */
+              scrollbarColor: '#A0AEC0 #EDF2F7', /* Firefox */
+              WebkitOverflowScrolling: 'touch' /* iOS smooth scrolling */
+            }}
           >
-            {messages.map((message, index) => (
+            {/* Loading history indicator */}
+            {isLoadingHistory && (
+              <div className="text-center py-2 text-white text-sm opacity-75">
+                Loading older messages...
+              </div>
+            )}
+            
+            {/* Conversation history */}
+            {chatHistory.map((msg) => (
               <div
-                key={`message-${index}`}
-                className={`p-2 mb-2 bg-transparent rounded-md shadow-sm animate-pop ${
-                  message.type === "transcription" ? "self-start" : "self-end"
-                }`}
+                key={msg.id}
+                className={`message py-2 rounded animate-pop mb-2 ${msg.isUser ? 'ml-12 mr-2' : 'mr-12 ml-2'}`}
+                style={{
+                  color: "white",
+                  backgroundColor: msg.isUser 
+                    ? "rgba(55, 65, 81, 0.8)" 
+                    : msg.isError 
+                      ? "rgba(220, 38, 38, 0.7)" 
+                      : "rgba(17, 24, 39, 0.8)",
+                  backdropFilter: "blur(10px)",
+                  textAlign: msg.isUser ? "right" : "left",
+                  borderRadius: msg.isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  padding: "10px 16px",
+                }}
               >
-                <div
-                  className={`relative p-3 rounded-md shadow-md max-w-[100%] ${
-                    message.type === "transcription"
-                      ? "bg-green-300 ml-0"
-                      : "bg-white mr-0"
-                  } ${message.type === "transcription" ? "ml-0" : "mr-auto"}`}
-                >
-                  <div
-                    className={`absolute ${
-                      message.type === "transcription" ? "-left-2" : "-right-2"
-                    } w-0 h-0 border-t-4 border-r-transparent`}
-                  ></div>
-                  {message.text}
+                <div className="flex flex-col">
+                  {/* Message timestamp */}
+                  <span className="text-xs opacity-60 mb-1">
+                    {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </span>
+                  
+                  {/* Message content */}
+                  {msg.isTypingIndicator ? (
+                    <div className="flex items-center">
+                      <span className="text-sm mr-2">Thinking</span>
+                      <div className="flex space-x-1">
+                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-sm">{msg.text}</span>
+                  )}
                 </div>
               </div>
             ))}
+            
+            {/* Element to scroll to */}
+            <div ref={chatEndRef} style={{ marginBottom: '8px' }} />
+            
+            {/* Scroll to bottom button */}
+            {showScrollButton && (
+              <button 
+                onClick={scrollToBottom}
+                className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-60 text-white rounded-full p-3 shadow-lg"
+                style={{ backdropFilter: "blur(5px)" }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 

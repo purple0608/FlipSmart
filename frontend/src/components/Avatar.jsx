@@ -111,9 +111,120 @@ export function Avatar(props) {
   const [winkRight, setWinkRight] = useState(false);
   const [facialExpression, setFacialExpression] = useState("");
   const [animation, setAnimation] = useState("Idle");
-
+  
+  // References for animation control
   const group = useRef();
+  const mouthAnimationRef = useRef(null);
   const { actions, mixer } = useAnimations(useGLTF("/models/animations.glb").animations, group);
+  
+  // Start mouth animation with controlled cycle for speaking
+  const startMouthAnimation = () => {
+    // Check if animation is already running
+    if (mouthAnimationRef.current) {
+      console.log("Mouth animation already running");
+      return;
+    }
+    
+    console.log("Starting mouth animation");
+    let animationStep = 0;
+    let frameId = null;
+    let hasMouthSmile = false;
+    
+    // Check if mouthSmile morph target exists
+    scene.traverse((child) => {
+      if (child.isSkinnedMesh && child.morphTargetDictionary) {
+        if (child.morphTargetDictionary["mouthSmile"] !== undefined) {
+          hasMouthSmile = true;
+        }
+      }
+    });
+    
+    // Define the mouth positions cycle
+    const mouthPositions = [
+      { open: 0.1, smile: 0.2, duration: 180 },  // Nearly closed
+      { open: 0.5, smile: 0.3, duration: 120 },   // Half open
+      { open: 0.8, smile: 0.25, duration: 150 },  // Wide open
+      { open: 0.3, smile: 0.35, duration: 100 },  // Partially open
+    ];
+    
+    // Add some natural random variation to each cycle
+    const addVariation = () => {
+      return mouthPositions.map(pos => ({
+        open: pos.open * (0.8 + Math.random() * 0.4),  // 80% to 120% of original
+        smile: pos.smile * (0.9 + Math.random() * 0.2), // 90% to 110% of original
+        duration: pos.duration * (0.9 + Math.random() * 0.2) // 90% to 110% of original
+      }));
+    };
+    
+    let positions = addVariation();
+    let lastUpdateTime = Date.now();
+    let currentDuration = positions[0].duration;
+    
+    // The animation function
+    const animate = () => {
+      const now = Date.now();
+      const elapsed = now - lastUpdateTime;
+      
+      // Time to move to next position?
+      if (elapsed > currentDuration) {
+        animationStep = (animationStep + 1) % positions.length;
+        lastUpdateTime = now;
+        
+        // Every 4 positions (1 full cycle), add variation
+        if (animationStep === 0) {
+          positions = addVariation();
+        }
+        
+        currentDuration = positions[animationStep].duration;
+      }
+      
+      // Calculate how far we are through the current position (0 to 1)
+      const progress = Math.min(1.0, elapsed / currentDuration);
+      
+      // Current position values
+      const current = positions[animationStep];
+      const next = positions[(animationStep + 1) % positions.length];
+      
+      // Interpolate between current and next position
+      const openAmount = current.open + (next.open - current.open) * progress;
+      const smileAmount = current.smile + (next.smile - current.smile) * progress;
+      
+      // Apply morphs with slow transitions for smoothness
+      lerpMorphTarget("mouthOpen", openAmount, 0.3);
+      if (hasMouthSmile) {
+        lerpMorphTarget("mouthSmile", smileAmount, 0.5);
+      }
+      
+      // Continue animation
+      frameId = requestAnimationFrame(animate);
+    };
+    
+    // Start the animation
+    frameId = requestAnimationFrame(animate);
+    
+    // Save the cancel function to the ref
+    mouthAnimationRef.current = () => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      
+      // Reset mouth morphs gradually
+      lerpMorphTarget("mouthOpen", 0, 0.3);
+      if (hasMouthSmile) {
+        lerpMorphTarget("mouthSmile", 0.1, 0.5);
+      }
+    };
+  };
+  
+  // Stop mouth animation
+  const stopMouthAnimation = () => {
+    if (mouthAnimationRef.current) {
+      console.log("Stopping mouth animation");
+      mouthAnimationRef.current();
+      mouthAnimationRef.current = null;
+    }
+  };
 
   useEffect(() => {
     console.log(message);
@@ -124,12 +235,231 @@ export function Avatar(props) {
     setAnimation(message.animation);
     setFacialExpression(message.facialExpression);
     setLipsync(message.lipsync);
-    console.log(message+"In avatar");
-    const audio = new Audio("data:audio/mp3;base64," + message.audio);
-    audio.play();
-    setAudio(audio);
-    audio.onended = onMessagePlayed;
-  }, [message, onMessagePlayed]);
+    console.log("Message in avatar:", message.text);
+    
+    // Skip if no audio data
+    if (!message.audio) {
+      console.error("No audio data in message");
+      onMessagePlayed(); // Move on immediately if no audio
+      return;
+    }
+    
+    console.log("Creating audio element with data length:", message.audio.length);
+    const audioElement = new Audio("data:audio/mp3;base64," + message.audio);
+    setAudio(audioElement);
+    
+    // Default audio settings
+    audioElement.volume = 1.0;
+    
+    // Print available morph targets for debugging
+    console.log("Available morph targets:", Object.keys(nodes.EyeLeft.morphTargetDictionary || {}));
+    console.log("Available morph targets (Wolf3D_Head):", 
+      nodes.Wolf3D_Head ? Object.keys(nodes.Wolf3D_Head.morphTargetDictionary || {}) : "No Wolf3D_Head found");
+    
+    try {
+      // IMPORTANT: Only set up lip sync AFTER audio starts playing
+      let isAudioPlaying = false;
+      let mouthAnimationActive = false;
+      
+      // Make sure we detect when audio is actually playing
+      audioElement.addEventListener('playing', () => {
+        console.log("Audio is now playing");
+        isAudioPlaying = true;
+      });
+      
+      // IMPORTANT: Start playing the audio FIRST
+      console.log("Attempting to play audio...");
+      audioElement.play().catch(err => {
+        console.error("Audio play failed:", err);
+        onMessagePlayed(); // Move on if audio fails
+        return;
+      });
+    
+      // Find which mouth morphs we can use
+      const hasMouthOpen = nodes.Wolf3D_Head && nodes.Wolf3D_Head.morphTargetDictionary && 
+                          nodes.Wolf3D_Head.morphTargetDictionary["mouthOpen"] !== undefined;
+      const hasMouthSmile = nodes.Wolf3D_Head && nodes.Wolf3D_Head.morphTargetDictionary && 
+                           nodes.Wolf3D_Head.morphTargetDictionary["mouthSmile"] !== undefined;
+      
+      console.log("Available morphs - mouthOpen:", hasMouthOpen, "mouthSmile:", hasMouthSmile);
+      
+      if (!hasMouthOpen) {
+        // If we don't have mouth morphs, just play the audio
+        audioElement.onended = onMessagePlayed;
+        return;
+      }
+    
+    // Reference to the cancellation function for any active animation
+    let cancelCurrentAnimation = null;
+    
+    // Function to animate a talk cycle with controlled timing
+    const animateTalkCycle = () => {
+      // Cancel any existing animation
+      if (cancelCurrentAnimation) {
+        cancelCurrentAnimation();
+        cancelCurrentAnimation = null;
+      }
+      
+      // Current position in animation sequence
+      let animationStep = 0;
+      let frameId = null;
+      
+      // Define 4 different mouth positions to cycle between
+      // with slightly different timing to feel natural
+      const mouthPositions = [
+        { open: 0.1, smile: 0.2, duration: 180 },   // Nearly closed
+        { open: 0.5, smile: 0.3, duration: 120 },   // Half open
+        { open: 0.8, smile: 0.25, duration: 150 },  // Wide open
+        { open: 0.3, smile: 0.35, duration: 100 },  // Partially open
+      ];
+      
+      // Add some natural random variation to each cycle
+      const addVariation = () => {
+        return mouthPositions.map(pos => ({
+          open: pos.open * (0.8 + Math.random() * 0.4),  // 80% to 120% of original
+          smile: pos.smile * (0.9 + Math.random() * 0.2), // 90% to 110% of original
+          duration: pos.duration * (0.9 + Math.random() * 0.2) // 90% to 110% of original
+        }));
+      };
+      
+      let positions = addVariation();
+      let lastUpdateTime = Date.now();
+      let currentDuration = positions[0].duration;
+      
+      // The animation function
+      const animate = () => {
+        const now = Date.now();
+        const elapsed = now - lastUpdateTime;
+        
+        // Time to move to next position?
+        if (elapsed > currentDuration) {
+          animationStep = (animationStep + 1) % positions.length;
+          lastUpdateTime = now;
+          
+          // Every 4 positions (1 full cycle), add variation
+          if (animationStep === 0) {
+            positions = addVariation();
+          }
+          
+          currentDuration = positions[animationStep].duration;
+        }
+        
+        // Calculate how far we are through the current position (0 to 1)
+        const progress = Math.min(1.0, elapsed / currentDuration);
+        
+        // Current position values
+        const current = positions[animationStep];
+        const next = positions[(animationStep + 1) % positions.length];
+        
+        // Interpolate between current and next position
+        const openAmount = current.open + (next.open - current.open) * progress;
+        const smileAmount = current.smile + (next.smile - current.smile) * progress;
+        
+        // Apply morphs with slow transitions for smoothness
+        lerpMorphTarget("mouthOpen", openAmount, 0.3);
+        if (hasMouthSmile) {
+          lerpMorphTarget("mouthSmile", smileAmount, 0.5);
+        }
+        
+        // Continue animation
+        frameId = requestAnimationFrame(animate);
+      };
+      
+      // Start the animation
+      frameId = requestAnimationFrame(animate);
+      
+      // Return a function that cancels this animation
+      return () => {
+        if (frameId) {
+          cancelAnimationFrame(frameId);
+          frameId = null;
+        }
+      };
+    };
+    
+    // Only start animation when we confirm audio is playing
+    audioElement.addEventListener('playing', () => {
+      if (!mouthAnimationActive) {
+        console.log("Audio playing confirmed - starting mouth animation");
+        mouthAnimationActive = true;
+        cancelCurrentAnimation = animateTalkCycle();
+      }
+    });
+    
+    // Also stop animation if audio is paused
+    audioElement.addEventListener('pause', () => {
+      if (cancelCurrentAnimation) {
+        console.log("Audio paused - stopping mouth animation");
+        cancelCurrentAnimation();
+        cancelCurrentAnimation = null;
+        mouthAnimationActive = false;
+      }
+    });
+    
+    // Also monitor for audio errors
+    audioElement.addEventListener('error', (e) => {
+      console.error("Audio error:", e);
+      onMessagePlayed(); // Move on if audio fails
+    });
+    
+    // Set up audio ended callback with explicit logging
+    audioElement.addEventListener('ended', () => {
+      console.log("Audio ended event fired");
+      
+      // Stop the talk animation
+      if (cancelCurrentAnimation) {
+        console.log("Stopping mouth animation");
+        cancelCurrentAnimation();
+        cancelCurrentAnimation = null;
+      }
+      
+      // Reset mouth morphs
+      lerpMorphTarget("mouthOpen", 0, 0.3);
+      if (hasMouthSmile) {
+        lerpMorphTarget("mouthSmile", 0.1, 0.5);
+      }
+      
+      // Small delay before calling onMessagePlayed to ensure animations finish
+      setTimeout(() => {
+        onMessagePlayed();
+      }, 300);
+    });
+    
+    // Cleanup function with explicit stopping of mouth animations
+    return () => {
+      // Stop any animations immediately
+      if (cancelCurrentAnimation) {
+        console.log("Component cleanup - stopping all animations");
+        cancelCurrentAnimation();
+        cancelCurrentAnimation = null;
+      }
+      
+      // Reset mouth morphs
+      lerpMorphTarget("mouthOpen", 0, 0.1);
+      if (hasMouthSmile) {
+        lerpMorphTarget("mouthSmile", 0, 0.1);
+      }
+      
+      // Clean up audio with explicit handling
+      if (audioElement) {
+        console.log("Stopping audio playback during cleanup");
+        audioElement.pause();
+        audioElement.currentTime = 0;
+        
+        // Remove all event listeners
+        audioElement.onended = null;
+        audioElement.onpause = null;
+        audioElement.onplaying = null;
+        audioElement.onerror = null;
+      }
+    };
+    } catch (err) {
+      console.error("Error setting up lip sync:", err);
+      // Fall back to simple audio playback without lip sync
+      audioElement.play().catch(e => console.error("Fallback audio play failed:", e));
+      audioElement.onended = onMessagePlayed;
+    }
+  }, [message, onMessagePlayed, nodes, scene]);
 
   useEffect(() => {
     const currentAction = actions[animation];

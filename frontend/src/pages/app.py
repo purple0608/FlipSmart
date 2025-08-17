@@ -11,11 +11,11 @@ from flask_socketio import SocketIO
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS
-CORS(app, origins=["http://localhost:5173"])
+# Configure CORS - allow any localhost port
+CORS(app, origins=["http://localhost:*", "http://127.0.0.1:*"])
 
-# Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins=["http://localhost:5173"])
+# Initialize SocketIO with permissive CORS for development
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 recognizer_thread = None
 stop_event = threading.Event()
@@ -23,6 +23,7 @@ stop_event = threading.Event()
 # In-memory variable to store recorded text
 recorded_text = ""
 recorded_text_lock = threading.Lock()
+is_recording = False
 
 def write_to_text(text):
     global recorded_text
@@ -60,7 +61,18 @@ def speak_to_microphone(api_key, region):
 
 @app.route('/start-recording', methods=['POST'])
 def start_recording():
-    global recognizer_thread, stop_event
+    global recognizer_thread, stop_event, is_recording, recorded_text
+    
+    # Reset the recorded text when starting a new recording
+    with recorded_text_lock:
+        recorded_text = ""
+    
+    # Don't start a new recording if one is already running
+    if is_recording:
+        return jsonify({"status": "Recording is already running"})
+    
+    is_recording = True
+    
     if recognizer_thread is None or not recognizer_thread.is_alive():
         stop_event.clear()
         recognizer_thread = threading.Thread(target=speak_to_microphone, args=(api_key, region))
@@ -113,20 +125,26 @@ def start_recording():
 
 @app.route('/stop-recording', methods=['POST'])
 def stop_recording():
-    global stop_event, recorded_text, recognizer_thread
+    global stop_event, recorded_text, recognizer_thread, is_recording
 
+    # Set the flag to indicate recording has stopped
+    is_recording = False
+    
+    # Signal the thread to stop
     stop_event.set()
+    
+    # Wait for the thread to finish (with timeout to prevent hanging)
     if recognizer_thread is not None:
-        recognizer_thread.join()
+        recognizer_thread.join(timeout=2.0)
 
     try:
+        # Get a copy of the recorded text with proper synchronization
+        with recorded_text_lock:
+            text_to_send = recorded_text.strip()
+        
         # Write the recorded text to a file
         with open('recorded_text.txt', 'w') as file:
-            file.write(recorded_text)
-        
-        # Read the file content to include in the response
-        with open('recorded_text.txt', 'r') as file:
-            file_content = file.read()
+            file.write(text_to_send)
         
         # Clear the recorded text after writing to file
         with recorded_text_lock:
@@ -135,10 +153,11 @@ def stop_recording():
         # Return JSON response with file content
         return jsonify({
             "status": "Recording stopped and text written to file",
-            "file_content": file_content
+            "file_content": text_to_send
         })
 
     except Exception as e:
+        is_recording = False  # Make sure to reset in case of error
         return jsonify({"status": f"Error: {str(e)}"}), 500
 
 

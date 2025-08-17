@@ -10,6 +10,7 @@ import OpenAI from "openai";
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 import {
   GoogleGenerativeAI,
@@ -20,17 +21,57 @@ import {
 dotenv.config();
 
 // Initialize API keys and models
-const apiKey = "AIzaSyCmxupyVwQeUMFYM-ho2F5dQ9-gBKSEc2w"; // Replace with your actual API key
-const elevenLabsApiKey = "sk_99312b0e877a42b64a03ab1212e020a3625fd9f6d3092c60";
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY; 
+const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
 const voiceID = "kgG7dCoKCfLehAPWkJOE";
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Cache for AI responses and TTS audio to reduce latency
+const responseCache = {
+  text: new Map(),  // Cache for text responses
+  audio: new Map(), // Cache for audio responses
+  
+  // Get a hash key for caching
+  getKey(message) {
+    return crypto
+      .createHash('md5')
+      .update(message.toLowerCase().trim())
+      .digest('hex');
+  },
+  
+  // Get cached text response if exists
+  getCachedTextResponse(message) {
+    const key = this.getKey(message);
+    return this.text.get(key);
+  },
+  
+  // Save text response to cache
+  saveTextResponse(message, response) {
+    const key = this.getKey(message);
+    this.text.set(key, response);
+    console.log(`Cached text response for key: ${key}`);
+  },
+  
+  // Get cached audio response if exists
+  getCachedAudioResponse(textResponse) {
+    const key = this.getKey(textResponse);
+    return this.audio.get(key);
+  },
+  
+  // Save audio response to cache
+  saveAudioResponse(textResponse, audioData) {
+    const key = this.getKey(textResponse);
+    this.audio.set(key, audioData);
+    console.log(`Cached audio response for key: ${key}`);
+  }
+};
+
 // Define the path to the product data file
 const filePath = path.join(__dirname, 'productData.json');
 
-const genAI = new GoogleGenerativeAI("AIzaSyCmxupyVwQeUMFYM-ho2F5dQ9-gBKSEc2w");
+const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
 const model = genAI.getGenerativeModel({
   model: "gemini-1.5-pro",
 });
@@ -180,16 +221,15 @@ app.get("/voices", async (req, res) => {
 
 app.post("/chat", async (req, res) => {
   const userMessage = req.body.message;
-  console.log(userMessage);
+  console.log("Received message:", userMessage);
 
-  if (!userMessage) {
+  // Only send the default welcome message if userMessage is null/undefined/empty string
+  // This prevents generating responses for empty or whitespace-only messages
+  if (!userMessage || userMessage.trim() === "") {
       const fileName = `output_audio.mp3`;
       const textInput = "Hi i am meera , I am your flipsmart assistant. Ask me anything , I will be happy to help you.";
-      console.log(textInput);
+      console.log("Sending default greeting:", textInput);
       await textToSpeech(textInput);
-
-    
-  
 
     return res.send({
       messages: [
@@ -321,21 +361,34 @@ app.post("/chat", async (req, res) => {
 
 
     console.log("2. Model started\n");
-
-    // Send the user's message to Gemini AI
-    const result = await chatSession.sendMessage(userMessage);
-    if (result) {
-      console.log(result.response.text());
-      console.log("Success !");
+    
+    // Check if we have a cached response for this message
+    let responseText;
+    const cachedResponse = responseCache.getCachedTextResponse(userMessage);
+    
+    if (cachedResponse) {
+      console.log("Using cached text response");
+      responseText = cachedResponse;
     } else {
-      console.log("No Chat generated");
+      // Send the user's message to Gemini AI
+      const result = await chatSession.sendMessage(userMessage);
+      if (result) {
+        responseText = result.response.text();
+        console.log("Success !");
+        
+        // Cache the text response for future use
+        responseCache.saveTextResponse(userMessage, responseText);
+      } else {
+        console.log("No Chat generated");
+        return res.status(500).send({ error: "Failed to generate response" });
+      }
     }
 
     console.log("3. Message Generated\n");
 
     let messages = [
       {
-        text: result.response.text(),
+        text: responseText,
         facialExpression: "default",
         animation: "Talking_0",
       },
@@ -348,16 +401,35 @@ app.post("/chat", async (req, res) => {
       console.log(message);
 
       const fileName = `output_audio.mp3`;
+      let audioData;
 
-      console.log("5. Audio gen Started \n");
+      // Check if we have cached audio for this text response
+      const cachedAudio = responseCache.getCachedAudioResponse(message.text);
+      
+      if (cachedAudio) {
+        console.log("Using cached audio response");
+        audioData = cachedAudio;
+        
+        // Still write the cached audio to file for consistency with the rest of the flow
+        // This step could be optimized out in the future
+        await fs.writeFile(fileName, Buffer.from(cachedAudio, 'base64'));
+      } else {
+        console.log("5. Audio gen Started \n");
 
-      const textInput = message.text;
-      console.log(textInput);
-      console.log("6. Text extracted");
+        const textInput = message.text;
+        console.log(textInput);
+        console.log("6. Text extracted");
 
-      await textToSpeech(textInput);
+        await textToSpeech(textInput);
 
-      console.log("7. Got the voice !!");
+        console.log("7. Got the voice !!");
+
+        // Read the generated audio file
+        audioData = await audioFileToBase64(fileName);
+        
+        // Cache the audio for future use
+        responseCache.saveAudioResponse(message.text, audioData);
+      }
 
       // Generate lipsync data
       // await lipSyncMessage(i);
@@ -365,7 +437,7 @@ app.post("/chat", async (req, res) => {
       console.log("8. Got the lip sync");
 
       // Attach audio and lipsync to the message
-      message.audio = await audioFileToBase64(fileName);
+      message.audio = audioData;
       console.log("9. Audio attached\n");
 
       // message.lipsync = await readJsonTranscript(`au`);
