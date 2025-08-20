@@ -1,5 +1,7 @@
 # Node modules
 node_modules/
+frontend/node_modules/
+backend/node_modules/
 
 # Logs
 *.log
@@ -19,6 +21,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-backend/flipkart-433216-8ef7a14e07e9.json
+backend/flipkart-433216-866954c9cd79.json
 backend/.env
 frontend/.env

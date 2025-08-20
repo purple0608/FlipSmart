@@ -5,6 +5,7 @@ import { Leva } from "leva";
 import { Experience } from "../components/Experience";
 import { UI } from "../components/UI";
 import ToggleButton from "../components/ToggleButton";
+import Calculus from "../components/Calculus";
 
 function Avatar() {
   // State to track selected product for iframe display
@@ -27,12 +28,13 @@ function Avatar() {
           <>
             {/* Product Website - 60% width */}
             <div className="w-1/2 border-l border-gray-300">
-              <iframe
+              {/* <iframe
                 src={selectedProduct.website}
                 title={selectedProduct.name}
                 className="w-full h-full border-0"
                 sandbox="allow-scripts allow-same-origin allow-forms"
-              />
+              /> */}
+              <Calculus />
             </div>
             
             {/* Chat and Avatar - 40% width */}

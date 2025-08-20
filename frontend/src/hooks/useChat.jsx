@@ -211,7 +211,7 @@ export const ChatProvider = ({ children }) => {
             const aiMessage = {
               id: uuidv4(),
               // Use demo mode greeting if demo mode is active
-              text: isDemoMode ? "Hi I am Meera Your 3D demo buddy!" : "Hi, How can I help you today?",
+              text: isDemoMode ? "Hi I am Meera Your 3D demo buddy!" : "Hi i am meera , I am your 3D AI assistant. Ask me anything , I will be happy to help you",
               isUser: false,
               timestamp: new Date().toISOString(),
             };
