@@ -27,7 +27,7 @@ function Avatar() {
         {selectedProduct ? (
           <>
             {/* Product Website - 60% width */}
-            <div className="w-1/2 border-l border-gray-300">
+            <div className="w-1/2 border-l border-gray-300 h-screen overflow-y-auto">
               {/* <iframe
                 src={selectedProduct.website}
                 title={selectedProduct.name}
