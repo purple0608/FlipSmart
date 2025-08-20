@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 const backendUrl = 'http://localhost:3000';
@@ -25,6 +25,10 @@ const saveChatHistory = (history) => {
 };
 
 export const ChatProvider = ({ children }) => {
+  // Demo mode state
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  // Product context override for demo mode
+  const [contextOverride, setContextOverride] = useState(null);
   // Queue of messages to be spoken by the avatar
   const [messages, setMessages] = useState([]);
   // Current message being spoken
@@ -70,10 +74,17 @@ export const ChatProvider = ({ children }) => {
     setChatHistory(prevHistory => [...prevHistory, typingMessage]);
     
     try {
+      console.log("Sending message to backend: ", messageText);
+      console.log("Demo mode: ", isDemoMode);
+      console.log("Context override: ", contextOverride);
       const response = await fetch(`${backendUrl}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText }),
+        body: JSON.stringify({
+          message: messageText,
+          isDemoMode,
+          contextOverride
+        }),
       });
       
       const data = await response.json();
@@ -96,30 +107,26 @@ export const ChatProvider = ({ children }) => {
           return updatedHistory;
         });
         
-        setMessages(newMessages);
+        // Update the message queue for the avatar to speak
+        setMessages(data.messages);
       }
     } catch (error) {
       console.error('Error in chat:', error);
       
-      // Remove typing indicator in case of error
+      // Remove typing indicator on error
       setChatHistory(prevHistory => prevHistory.filter(msg => msg.id !== typingIndicatorId));
       
-      // Add error message to chat history
-      const errorMessageId = uuidv4();
+      // Add error message
       const errorMessage = {
-        id: errorMessageId,
-        text: "Sorry, I encountered an error. Please try again later.",
+        id: uuidv4(),
+        text: "Sorry, I encountered an error. Please try again.",
         isUser: false,
         isError: true,
         timestamp: new Date().toISOString(),
         replyToMessageId: userMessageId
       };
       
-      setChatHistory(prevHistory => {
-        const updatedHistory = [...prevHistory, errorMessage];
-        saveChatHistory(updatedHistory);
-        return updatedHistory;
-      });
+      setChatHistory(prevHistory => [...prevHistory, errorMessage]);
     } finally {
       setLoading(false);
     }
@@ -164,6 +171,18 @@ export const ChatProvider = ({ children }) => {
 
   // Check if it's the first load and show greeting
   useEffect(() => {
+    // Check if we're in demo mode from localStorage
+    const storedDemoMode = localStorage.getItem('isDemoMode') === 'true';
+    
+    if (storedDemoMode) {
+      setIsDemoMode(true);
+      // If we're refreshing in demo mode, clear history
+      clearHistory();
+    } else {
+      // If we're not in demo mode, ensure contextOverride is cleared
+      setContextOverride(null);
+    }
+    
     const showInitialGreeting = async () => {
       // Only show greeting if no chat history and greeting hasn't been shown yet
       if (chatHistory.length === 0 && !greetingShown) {
@@ -191,7 +210,8 @@ export const ChatProvider = ({ children }) => {
             // Add to chat history
             const aiMessage = {
               id: uuidv4(),
-              text: "Hi, How can I help you today?",
+              // Use demo mode greeting if demo mode is active
+              text: isDemoMode ? "Hi I am Meera Your 3D demo buddy!" : "Hi, How can I help you today?",
               isUser: false,
               timestamp: new Date().toISOString(),
             };
@@ -226,6 +246,33 @@ export const ChatProvider = ({ children }) => {
     }
   }, [messages, message]);
 
+  // Method to set demo mode state
+  const setDemoModeState = useCallback((isDemoModeActive) => {
+    setIsDemoMode(isDemoModeActive);
+    localStorage.setItem('isDemoMode', isDemoModeActive.toString());
+  }, []);
+  
+  // Method to set context override for demo mode
+  const setProductContext = useCallback((context) => {
+    return new Promise((resolve) => {
+      console.log("Setting product context override inside chat: ", context);
+      setContextOverride(context);
+      setTimeout(() => {
+        resolve();
+      }, 50);
+      console.log("Product context override set inside chat", contextOverride);
+    });
+  }, []);
+
+  // Add a function to stop the avatar from speaking
+  const stopSpeaking = useCallback(() => {
+    console.log("Stopping AI response playback");
+    // Clear the message queue and stop current message
+    setMessages([]);
+    setMessage(null);
+    setIsAvatarSpeaking(false);
+  }, []);
+
   return (
     <ChatContext.Provider
       value={{
@@ -240,7 +287,12 @@ export const ChatProvider = ({ children }) => {
         chatHistory,
         clearHistory,
         loadMoreHistory,
-        isLoadingHistory
+        isLoadingHistory,
+        isDemoMode,
+        setDemoModeState,
+        setProductContext,
+        contextOverride,
+        stopSpeaking
       }}
     >
       {children}

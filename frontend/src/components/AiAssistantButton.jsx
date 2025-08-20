@@ -33,7 +33,7 @@ const AiAssistantButton = () => {
           onClick={handleClick}
           className="p-4 rounded-full shadow-lg bg-gradient-to-r from-blue-500 via-pink-500 to-blue-800 hover:bg-slate-400 text-white text-lg font-semibold"
         >
-          Talk to Flipkart Assistant
+          Talk to InfoEdge Assistant
         </button>
       </div>
     </div>

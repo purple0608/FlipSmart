@@ -8,6 +8,8 @@ import "../index.css";
 
 import { AvatarContext } from "../hooks/AvatarProvider";
 import TopProducts from "./TopProducts";
+import ChatToggle from "./ChatToggle";
+import { FaMicrophone, FaStop, FaChevronDown, FaTrash } from "react-icons/fa";
 
 const socket = io("http://127.0.0.1:5000", {
   reconnectionAttempts: 5,
@@ -32,7 +34,9 @@ export const UI = ({ hidden, ...props }) => {
     chatHistory,
     clearHistory,
     loadMoreHistory,
-    isLoadingHistory
+    isLoadingHistory,
+    isDemoMode,
+    stopSpeaking
   } = useChat();
   
   const [recording, setRecording] = useState(false);
@@ -40,17 +44,11 @@ export const UI = ({ hidden, ...props }) => {
   const [transcription, setTranscription] = useState("");
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [usingClientTTS, setUsingClientTTS] = useState(false);
+  const [isChatVisible, setIsChatVisible] = useState(true);
   
   const messageContainerRef = useRef();
   const chatEndRef = useRef();
   const { avatar, setAvatar } = useContext(AvatarContext);
-  const [messages, setMessages] = useState(() => {
-    // Initialize messages from session storage
-    const storedMessages = sessionStorage.getItem("messages");
-    return storedMessages
-      ? JSON.parse(storedMessages)
-      : [{ text: "Hello! Welcome to Flipkart.", type: "message" }];
-  });
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey && input.current.value) {
@@ -114,7 +112,7 @@ export const UI = ({ hidden, ...props }) => {
     navigate("/");
   };
 
-  const startRecording = async () => {
+  const toggleRecording = async () => {
     // Don't record when avatar is speaking
     if (isAvatarSpeaking) {
       console.log("Avatar is speaking, please wait...");
@@ -226,9 +224,15 @@ export const UI = ({ hidden, ...props }) => {
 
   const scrollToBottom = useCallback(() => {
     if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => {
+        chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }, 100); // Small delay to ensure DOM updates are complete
     }
   }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatHistory, scrollToBottom]);
 
   const handleScroll = useCallback(() => {
     if (!messageContainerRef.current) return;
@@ -254,20 +258,9 @@ export const UI = ({ hidden, ...props }) => {
 
   useEffect(() => {
     socket.on("speech_recognized", (data) => {
+      // Only update the transcription display here
+      // The actual sending of the message is handled by sendVoiceText after stopRecording
       setTranscription(data.text);
-      setMessages((prevList) => {
-        const newList = [
-          { text: data.text, type: "transcription" },
-          ...prevList,
-        ];
-        if (newList.length > 50) {
-          storeRemovedChats(newList.slice(50));
-          // Clear list and reset session storage
-          sessionStorage.setItem("messages", JSON.stringify([]));
-          return newList.slice(0, 50);
-        }
-        return newList;
-      });
     });
 
     return () => {
@@ -280,255 +273,250 @@ export const UI = ({ hidden, ...props }) => {
   }
 
   return (
-    <>
-      <div className="fixed top-0 left-0 right-0 bottom-0 z-10 flex justify-between p-4 flex-col pointer-events-none">
-        {/* Top Products Section */}
-        <div className="fixed left-40 top-4 z-20 hidden lg:block">
-          {" "}
-          {/* Adjust `left` and `top` as needed */}
-          <TopProducts />
-        </div>
-
-        <div className="absolute bg-white rounded-md shadow-md p-2">
-          <img
-            src="/flipkart.webp"
-            alt="Flipkart Logo"
-            className="w-32 h-auto hover:filter hover:brightness-110 transition-all duration-300"
-          />
-        </div>
-
-        <div className="w-full flex flex-col items-end justify-center gap-4">
-          <button
-            onClick={goToHome}
-            className="pointer-events-auto bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-md"
-          >
-            <img src="/home.svg" alt="Home" className="w-6 h-6" />
-          </button>
-          <button
-            onClick={() => setCameraZoomed(!cameraZoomed)}
-            className="pointer-events-auto bg-gray-500 hover:bg-pink-600 text-white p-4 rounded-md"
-          >
-            {cameraZoomed ? (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-6 h-6"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-6"
-                />
-              </svg>
-            ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-6 h-6"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6"
-                />
-              </svg>
-            )}
-          </button>
-
-  
-        </div>
-
-        <div className="flex items-center gap-2 pointer-events-auto max-w-screen-sm w-full mx-auto">
-          <input
-            className="w-full placeholder:text-gray-800 placeholder:italic p-4 rounded-md bg-opacity-50 bg-white backdrop-blur-md"
-            placeholder="Type a message..."
-            ref={input}
-            onKeyDown={handleKeyPress}
-          />
-          <button
-            disabled={loading || isAvatarSpeaking}
-            onClick={sendMessage}
-            className={`bg-blue-500 hover:bg-blue-900 text-white p-4 px-10 font-semibold uppercase rounded-md ${
-              (loading || isAvatarSpeaking) ? "cursor-not-allowed opacity-30" : ""
-            }`}
-          >
-            Send
-          </button>
-          <button
-            onClick={startRecording}
-            disabled={processingAudio || loading || isAvatarSpeaking}
-            className={`pointer-events-auto text-white p-4 rounded-md ${
-              recording
-                ? "bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700"
-                : "bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600"
-            } ${(processingAudio || loading || isAvatarSpeaking) ? "opacity-50 cursor-not-allowed" : ""} flex items-center justify-center`}
-          >
-            {recording ? (
-              <img src="/mon.svg" alt="Recording" className="w-6 h-6" />
-            ) : (
-              <img src="/moff.svg" alt="Not recording" className="w-6 h-6" />
-            )}
-          </button>
-        </div>
-
-        {(recording || processingAudio) && (
-          <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 p-4 bg-black bg-opacity-50 text-white rounded-md">
-            {processingAudio ? "Processing..." : transcription || "Listening..."}
-          </div>
-        )}
-
-        <div className="fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] z-20 pointer-events-auto">
-          <div className="text-white text-lg font-semibold mb-2">
-            Flipkart Assistant: FlipSmart
-          </div>
-
-          {/* Chat history container */}
-          <div
-            ref={messageContainerRef}
-            className="h-[320px] overflow-y-scroll flex flex-col custom-scrollbar px-2 pointer-events-auto"
-            style={{
-              scrollBehavior: 'smooth',
-              scrollbarWidth: 'thin', /* Firefox */
-              scrollbarColor: '#A0AEC0 #EDF2F7', /* Firefox */
-              WebkitOverflowScrolling: 'touch' /* iOS smooth scrolling */
-            }}
-          >
-            {/* Loading history indicator */}
-            {isLoadingHistory && (
-              <div className="text-center py-2 text-white text-sm opacity-75">
-                Loading older messages...
-              </div>
-            )}
-            
-            {/* Conversation history */}
-            {chatHistory.map((msg) => (
-              <div
-                key={msg.id}
-                className={`message py-2 rounded animate-pop mb-2 ${msg.isUser ? 'ml-12 mr-2' : 'mr-12 ml-2'}`}
-                style={{
-                  color: "white",
-                  backgroundColor: msg.isUser 
-                    ? "rgba(55, 65, 81, 0.8)" 
-                    : msg.isError 
-                      ? "rgba(220, 38, 38, 0.7)" 
-                      : "rgba(17, 24, 39, 0.8)",
-                  backdropFilter: "blur(10px)",
-                  textAlign: msg.isUser ? "right" : "left",
-                  borderRadius: msg.isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                  padding: "10px 16px",
-                }}
-              >
-                <div className="flex flex-col">
-                  {/* Message timestamp */}
-                  <span className="text-xs opacity-60 mb-1">
-                    {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </span>
-                  
-                  {/* Message content */}
-                  {msg.isTypingIndicator ? (
-                    <div className="flex items-center">
-                      <span className="text-sm mr-2">Thinking</span>
-                      <div className="flex space-x-1">
-                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="text-sm">{msg.text}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            
-            {/* Element to scroll to */}
-            <div ref={chatEndRef} style={{ marginBottom: '8px' }} />
-            
-            {/* Scroll to bottom button */}
-            {showScrollButton && (
-              <button 
-                onClick={scrollToBottom}
-                className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-60 text-white rounded-full p-3 shadow-lg"
-                style={{ backdropFilter: "blur(5px)" }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+    <div className="relative w-full">
+      {/* Fixed UI Elements that always remain visible */}
+      <div className="fixed top-0 left-0 right-0 bottom-0 z-10 pointer-events-none">
+        <div className="flex justify-between p-4 flex-col h-full">
+          {/* Top Nav Buttons */}
+          <div className="w-full flex flex-col items-end justify-center gap-4">
+            <button
+              onClick={goToHome}
+              className="pointer-events-auto bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-md"
+            >
+              <img src="/home.svg" alt="Home" className="w-6 h-6" />
+            </button>
+            <button
+              onClick={() => setCameraZoomed(!cameraZoomed)}
+              className="pointer-events-auto bg-gray-500 hover:bg-pink-600 text-white p-4 rounded-md"
+            >
+              {cameraZoomed ? (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-6" />
                 </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
+                </svg>
+              )}
+            </button>
+          </div>
+
+          {/* Chat Input - Always visible */}
+          <div className="flex items-center gap-2 pointer-events-auto max-w-screen-sm w-full mx-auto">
+            <input
+              className="w-full placeholder:text-gray-800 placeholder:italic p-4 rounded-md bg-opacity-50 bg-white backdrop-blur-md"
+              placeholder="Type a message..."
+              ref={input}
+              onKeyDown={handleKeyPress}
+            />
+            <button
+              disabled={loading || isAvatarSpeaking}
+              onClick={sendMessage}
+              className={`bg-blue-500 hover:bg-blue-900 text-white p-4 px-10 font-semibold uppercase rounded-md ${
+                (loading || isAvatarSpeaking) ? "cursor-not-allowed opacity-30" : ""
+              }`}
+            >
+              Send
+            </button>
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={toggleRecording}
+                className={`
+                  ${recording ? "bg-red-500" : "bg-blue-500 hover:bg-blue-600"}
+                  text-white p-4 rounded-full flex items-center justify-center transition-colors
+                  ${processingAudio || loading || isAvatarSpeaking ? "opacity-50 cursor-not-allowed" : ""}
+                `}
+                disabled={processingAudio || loading || isAvatarSpeaking}
+                title={recording ? "Stop recording" : "Start recording"}
+              >
+                <FaMicrophone size={16} />
               </button>
-            )}
+              
+              <button
+                onClick={stopSpeaking}
+                className={`
+                  bg-red-500 hover:bg-red-600 text-white p-4 rounded-full 
+                  flex items-center justify-center transition-colors
+                  ${!isAvatarSpeaking ? "opacity-50 cursor-not-allowed" : ""}
+                `}
+                disabled={!isAvatarSpeaking}
+                title="Stop AI response"
+              >
+                <FaStop size={16} />
+              </button>
+              
+              <button
+                onClick={clearHistory}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 p-4 rounded-full flex items-center justify-center transition-colors"
+                title="Clear chat history"
+              >
+                <FaTrash size={16} />
+              </button>
+            </div>
           </div>
-        </div>
+          
+          {/* Recording Status */}
+          {(recording || processingAudio) && (
+            <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 p-4 bg-black bg-opacity-50 text-white rounded-md pointer-events-auto">
+              {processingAudio ? "Processing..." : transcription || "Listening..."}
+            </div>
+          )}
 
-        {loading && (
-          <div className="fixed bottom-[calc(20px+420px)] right-10 bg-gradient-to-r from-gray-200 to-gray-500 p-3 rounded-md shadow-lg w-[200px]">
-            <div className="relative">Loading...</div>
-          </div>
-        )}
+          {/* Loading Status */}
+          {loading && (
+            <div className="fixed bottom-[calc(20px+420px)] right-10 bg-gradient-to-r from-gray-200 to-gray-500 p-3 rounded-md shadow-lg w-[200px] pointer-events-auto">
+              <div className="relative">Loading...</div>
+            </div>
+          )}
 
-        <div className="fixed top-1/2 left-4 transform -translate-y-1/2 flex flex-col items-center gap-3 p-2 bg-transparent rounded-md shadow-md">
-          <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
-            <button
-              onClick={() => changeAvatar("/avatar1.glb")}
-              className="w-20 h-20 bg-gray-200 rounded-full"
-            >
-              <img
-                src="tech_avatar.avif"
-                alt="Avatar 1"
-                className="w-20 h-20 object-cover rounded-full"
-              />
-            </button>
-            <span className="blue-gradient_text font-semibold">Tech AI</span>
-          </div>
+          {/* Avatar Selection Menu - Only visible when NOT in demo mode */}
+          {!isDemoMode && (
+            <div className="fixed top-1/2 left-4 transform -translate-y-1/2 flex flex-col items-center gap-3 p-2 bg-transparent rounded-md shadow-md">
+              <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
+                <button
+                  onClick={() => changeAvatar("/avatar1.glb")}
+                  className="w-20 h-20 bg-gray-200 rounded-full"
+                >
+                  <img
+                    src="tech_avatar.avif"
+                    alt="Avatar 1"
+                    className="w-20 h-20 object-cover rounded-full"
+                  />
+                </button>
+                <span className="blue-gradient_text font-semibold h">Jeevan</span>
+              </div>
 
-          <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
-            <button
-              onClick={() => changeAvatar("/avatar2.glb")}
-              className="w-20 h-20 bg-gray-200 rounded-full"
-            >
-              <img
-                src="/home_avatar.jpg"
-                alt="Avatar 2"
-                className="w-20 h-20 object-cover rounded-full"
-              />
-            </button>
-            <span className="blue-gradient_text font-semibold">Home AI</span>
-          </div>
+              <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
+                <button
+                  onClick={() => changeAvatar("/avatar2.glb")}
+                  className="w-20 h-20 bg-gray-200 rounded-full"
+                >
+                  <img
+                    src="/home_avatar.jpg"
+                    alt="Avatar 2"
+                    className="w-20 h-20 object-cover rounded-full"
+                  />
+                </button>
+                <span className="blue-gradient_text font-semibold">Meera</span>
+              </div>
 
-          <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
-            <button
-              onClick={() => changeAvatar("/avatar3.glb")}
-              className="w-20 h-20 bg-gray-200 rounded-full"
-            >
-              <img
-                src="/fashion_avatar.avif"
-                alt="Avatar 3"
-                className="w-20 h-20 object-cover rounded-full"
-              />
-            </button>
-            <span className="blue-gradient_text font-semibold">Fashion AI</span>
-          </div>
+              {/* <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
+                <button
+                  onClick={() => changeAvatar("/avatar3.glb")}
+                  className="w-20 h-20 bg-gray-200 rounded-full"
+                >
+                  <img
+                    src="/fashion_avatar.avif"
+                    alt="Avatar 3"
+                    className="w-20 h-20 object-cover rounded-full"
+                  />
+                </button>
+                <span className="blue-gradient_text font-semibold"> AI</span>
+              </div> */}
 
-          <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
-            <button
-              onClick={() => changeAvatar("/avatar4.glb")}
-              className="w-20 h-20 bg-gray-200 rounded-full"
-            >
-              <img
-                src="/gifts_avatar.jpg"
-                alt="Avatar 4"
-                className="w-20 h-20 object-cover rounded-full"
-              />
-            </button>
-            <span className="blue-gradient_text font-semibold">Gifts AI</span>
-          </div>
+              {/* <div className="pointer-events-auto hover:bg-blue-600 w-32 h-32 flex flex-col p-3 items-center gap-2 rounded-lg bg-white">
+                <button
+                  onClick={() => changeAvatar("/avatar4.glb")}
+                  className="w-20 h-20 bg-gray-200 rounded-full"
+                >
+                  <img
+                    src="/gifts_avatar.jpg"
+                    alt="Avatar 4"
+                    className="w-20 h-20 object-cover rounded-full"
+                  />
+                </button>
+                <span className="blue-gradient_text font-semibold">Gifts AI</span>
+              </div> */}
+            </div>
+          )}
         </div>
       </div>
-    </>
+      
+      {/* Chat Toggle Button - Fixed at bottom right */}
+      <div className="fixed bottom-6 right-6 z-50 pointer-events-auto">
+        <ChatToggle onToggle={(isVisible) => setIsChatVisible(isVisible)} />
+      </div>
+
+      {/* Chat Window - Only this is collapsible */}
+      <div 
+        className={`fixed bottom-20 right-4 bg-gradient-to-r from-blue-700 to-purple-400 p-4 rounded-md shadow-lg w-[500px] h-[420px] z-20 pointer-events-auto 
+                    transition-all duration-300 ease-in-out transform ${isChatVisible ? 'translate-x-0 opacity-100' : 'translate-x-[520px] opacity-0'}`}
+      >
+        <div className="text-white text-lg font-semibold mb-2">
+          {isDemoMode ? "InfoEdge Assistant: Meera" : "InfoEdge Assistant: InfoSmart"}
+        </div>
+
+        {/* Chat Messages */}
+        <div
+          ref={messageContainerRef}
+          className="h-[320px] overflow-y-scroll flex flex-col custom-scrollbar px-2"
+          style={{
+            scrollBehavior: 'smooth',
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#A0AEC0 #EDF2F7',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
+          {isLoadingHistory && (
+            <div className="text-center py-2 text-white text-sm opacity-75">
+              Loading older messages...
+            </div>
+          )}
+          
+          {/* Chat Messages */}
+          {chatHistory.map((msg) => (
+            <div
+              key={msg.id}
+              className={`message py-2 rounded animate-pop mb-2 ${msg.isUser ? 'ml-12 mr-2' : 'mr-12 ml-2'}`}
+              style={{
+                color: "white",
+                backgroundColor: msg.isUser 
+                  ? "rgba(55, 65, 81, 0.8)" 
+                  : msg.isError 
+                    ? "rgba(220, 38, 38, 0.7)" 
+                    : "rgba(17, 24, 39, 0.8)",
+                backdropFilter: "blur(10px)",
+                textAlign: msg.isUser ? "right" : "left",
+                borderRadius: msg.isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                padding: "10px 16px",
+              }}
+            >
+              <div className="flex flex-col">
+                <span className="text-xs opacity-60 mb-1">
+                  {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </span>
+                
+                {msg.isTypingIndicator ? (
+                  <div className="flex items-center">
+                    <span className="text-sm mr-2">Thinking</span>
+                    <div className="flex space-x-1">
+                      <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                      <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                      <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-sm">{msg.text}</span>
+                )}
+              </div>
+            </div>
+          ))}
+          
+          <div ref={chatEndRef} style={{ marginBottom: '8px' }} />
+          
+          {showScrollButton && (
+            <button 
+              onClick={scrollToBottom}
+              className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-60 text-white rounded-full p-3 shadow-lg"
+              style={{ backdropFilter: "blur(5px)" }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
