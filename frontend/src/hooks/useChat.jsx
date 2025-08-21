@@ -41,6 +41,7 @@ export const ChatProvider = ({ children }) => {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   // Track if greeting has been shown
   const [greetingShown, setGreetingShown] = useState(false);
+  const [startTour, setStartTour] = useState(false); // To trigger the tour
 
   const chat = async (messageText) => {
     setLoading(true);
@@ -85,6 +86,7 @@ export const ChatProvider = ({ children }) => {
           isDemoMode,
           contextOverride
         }),
+        // credentials: 'include',
       });
       
       const data = await response.json();
@@ -93,6 +95,16 @@ export const ChatProvider = ({ children }) => {
       setChatHistory(prevHistory => prevHistory.filter(msg => msg.id !== typingIndicatorId));
       
       if (data && data.messages && data.messages.length > 0) {
+        // Check for custom action to start the tour
+        if (data.messages[0].action === 'start_tour') {
+          console.log("Starting tour triggered from useChat");
+          localStorage.removeItem('walkthrough');
+          setStartTour(true); // Signal to start the tour
+          // We don't want to add "Starting tour.." to chat history or speak it
+          setLoading(false);
+          return;
+        }
+
         const newMessages = data.messages.map(msg => ({
           ...msg,
           id: uuidv4(),
@@ -171,17 +183,11 @@ export const ChatProvider = ({ children }) => {
 
   // Check if it's the first load and show greeting
   useEffect(() => {
-    // Check if we're in demo mode from localStorage
-    const storedDemoMode = localStorage.getItem('isDemoMode') === 'true';
-    
-    if (storedDemoMode) {
-      setIsDemoMode(true);
-      // If we're refreshing in demo mode, clear history
-      clearHistory();
-    } else {
-      // If we're not in demo mode, ensure contextOverride is cleared
-      setContextOverride(null);
-    }
+    // On initial load, always reset demo mode and clear history
+    setIsDemoMode(false);
+    setContextOverride(null);
+    clearHistory();
+
     
     const showInitialGreeting = async () => {
       // Only show greeting if no chat history and greeting hasn't been shown yet
@@ -292,7 +298,9 @@ export const ChatProvider = ({ children }) => {
         setDemoModeState,
         setProductContext,
         contextOverride,
-        stopSpeaking
+        stopSpeaking,
+        startTour,
+        setStartTour // Expose setter to reset the trigger
       }}
     >
       {children}

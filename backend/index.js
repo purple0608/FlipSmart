@@ -11,6 +11,9 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { execFile } from "child_process";
+import util from "util";
+import session from 'express-session';
 
 import {
   GoogleGenerativeAI,
@@ -146,6 +149,15 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(cookieParser());
+
+// Session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-default-secret-key',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false } // Set to true if using HTTPS
+}));
+
 const port = 3000;
 
 app.use(express.static(__dirname));
@@ -242,12 +254,12 @@ app.post('/update-product-data', async (req, res) => {
 
 
 
+const execFilePromise = util.promisify(execFile);
+
 const textToSpeech = async (textInput) => {
   try {
-    // Call the Python script to generate audio
-    await execPromise(
-      `python3 sample2.py "${textInput}"`
-    );
+    // Pass arguments as an array → no shell splitting
+    await execFilePromise("python3", ["sample2.py", textInput]);
     console.log("Audio generated successfully!");
   } catch (error) {
     console.error("Error executing Python script:", error);
@@ -281,63 +293,60 @@ app.post("/chat", async (req, res) => {
   const userMessage = req.body.message;
   const isDemoMode = req.body.isDemoMode || false;
   const contextOverride = req.body.contextOverride || null;
-  
+
   console.log("Received message:", userMessage);
   console.log("Demo mode:", isDemoMode);
   if (contextOverride) {
     console.log("Context override provided");
-    console.log(contextOverride);
   }
 
-  // Only send the default welcome message if userMessage is null/undefined/empty string
-  // This prevents generating responses for empty or whitespace-only messages
+  const lowerCaseMessage = userMessage.toLowerCase().trim();
+
+  if (lowerCaseMessage === "start tour" || lowerCaseMessage === "start walkthrough") {
+    return res.send({
+      messages: [
+        {
+          text: "Starting tour..",
+          audio: "",
+          facialExpression: "smile",
+          animation: "Talking_1",
+          action: "start_tour",
+        },
+      ],
+    });
+  }
+
   if (!userMessage || userMessage.trim() === "") {
     const fileName = `output_audio.mp3`;
-    let greetingText = "Hi i am meera , I am your 3D AI assistant. Ask me anything , I will be happy to help you";
-    
-    // If we're in demo mode and have a context override, use Gemini to generate a custom greeting
+    let greetingText = "Hi, I'm Meera, your 3D AI assistant. Ask me anything, I'll be happy to help!";
+
     if (isDemoMode && contextOverride) {
       console.log("Generating custom greeting with context override");
-      
-      // Check if we have a cached greeting for this context
       const greetingKey = "greeting";
       const cachedGreeting = responseCache.getCachedTextResponse(greetingKey, contextOverride, isDemoMode);
-      
+
       if (cachedGreeting) {
         console.log("Using cached greeting for this context");
         greetingText = cachedGreeting;
       } else {
         try {
-          // Create a chat session with the context override prompt
           const chatSession = model.startChat({
             generationConfig,
-            history: [
-              {
-                role: "user",
-                parts: [{ text: contextOverride }]
-              }
-            ]
+            history: [{ role: "user", parts: [{ text: contextOverride }] }],
           });
-          
-          // Ask for a brief greeting
           const result = await chatSession.sendMessage("Please provide a brief greeting as this AI assistant. Keep it under 2 sentences.");
           if (result) {
             greetingText = result.response.text();
             console.log("Generated custom greeting:", greetingText);
-            
-            // Cache this greeting for future use with this context
             responseCache.saveTextResponse(greetingKey, greetingText, contextOverride, isDemoMode);
           }
         } catch (error) {
           console.error("Error generating custom greeting:", error);
-          // Fall back to default greeting if there's an error
         }
       }
     }
-    
+
     console.log("Sending greeting:", greetingText);
-    
-    // Check if we have a cached audio for this greeting
     let audioBase64;
     const cachedAudio = responseCache.getCachedAudioResponse(greetingText);
 
@@ -365,54 +374,34 @@ app.post("/chat", async (req, res) => {
   try {
     console.log("1. Chat started\n");
 
-    // Determine which prompt to use based on demo mode and context override
-    let initialPrompt = `Hi Gemini!! From now on, you are "Meera" – the friendly new-joiner buddy at InfoEdge.  
-    
-    📝 Knowledge Base:  
-    - Official company website: https://www.infoedge.in/  
-    - Annual Reports: https://www.infoedge.in/financials.html  
-    - Careers & Culture: https://careers.naukri.com/  
-    - Investor Relations: https://www.infoedge.in/investor-relations.html  
-    
-    🎉 Your role:  
-    - Use the above sources (and any uploaded documents) to answer employee FAQs.  
-    - If the answer exists in a linked document, **quote it or summarize it with a reference link**.  
-    - If unsure or if it's not in the provided sources, politely say:  
-      "I don't have that specific info, but you can check with HR or see our official InfoEdge website."  
-    
-    🎭 Style guidelines:  
-    - Be cheerful, conversational, and approachable.  
-    - Sound like a helpful colleague, not too formal.  
-    - Use natural conversational fillers (like "hmm", "so yeah", "okay cool").  
-    - Do not add emojis. Just plain text.
-    
-    ❌ Do not invent confidential policies or private HR rules.  
-    ✅ Stick to the sources provided.  
-    
-    Now, start acting as InfoEdge Smart and welcome a new hire.`;
-    
-    // If we have a context override, use that instead
+    let initialPrompt = `You are "Meera," an AI assistant for InfoEdge. Your knowledge base includes the following sources:
+- Official company website: https://www.infoedge.in/
+- Annual Reports: https://www.infoedge.in/financials.html
+- Careers & Culture: https://careers.naukri.com/
+- Investor Relations: https://www.infoedge.in/investor-relations.html
+
+Your role is to answer employee FAQs based on these sources and any uploaded documents. If an answer is found in a linked document, quote or summarize it with a reference link. If you are unsure or the information is not in the provided sources, respond with: "I don't have that specific info, but you can check with HR or see our official InfoEdge website."
+
+Style guidelines:
+- Be cheerful, conversational, and approachable.
+- Use emojis to add a friendly touch.
+- Keep answers concise (under 150 words).
+- If you use bullet points, use dashes (-) instead of asterisks (*).
+
+Conversation Flow:
+1. Acknowledge the user's query briefly.
+2. Provide the answer directly.
+3. End with a friendly closing, like "Hope this helps!" or "Let me know if you need anything else!"`;
+
     if (contextOverride && isDemoMode) {
+      console.log("Using context override for chat");
       initialPrompt = contextOverride;
     }
 
-    const chatSession = model.startChat({
-      generationConfig,
-      history: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: initialPrompt
-            }
-          ]
-        }
-      ]
-    });
+    if (!req.session.chatHistory) {
+      req.session.chatHistory = [];
+    }
 
-    console.log("2. Model started\n");
-
-    // Check if we have a cached response for this message
     let responseText;
     const cachedResponse = responseCache.getCachedTextResponse(userMessage, contextOverride, isDemoMode);
 
@@ -420,99 +409,59 @@ app.post("/chat", async (req, res) => {
       console.log("Using cached text response");
       responseText = cachedResponse;
     } else {
-      // Send the user's message to Gemini AI
+      const history = [
+        { role: "user", parts: [{ text: initialPrompt }] },
+        ...req.session.chatHistory,
+      ];
+
+      const chatSession = model.startChat({ generationConfig, history });
       const result = await chatSession.sendMessage(userMessage);
-      if (result) {
-        responseText = result.response.text();
-        // Cache the response
-        responseCache.saveTextResponse(userMessage, responseText, contextOverride, isDemoMode);
-      }
+      responseText = result.response.text();
+      responseCache.saveTextResponse(userMessage, responseText, contextOverride, isDemoMode);
     }
 
-    console.log("3. Message Generated\n");
+    req.session.chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
+    req.session.chatHistory.push({ role: "model", parts: [{ text: responseText }] });
 
-    let messages = [
-      {
-        text: responseText,
-        facialExpression: "default",
-        animation: "Talking_0",
-      },
-    ];
+    console.log("2. Model responded\n");
 
-    console.log("4. Voice gen Started \n");
+    const fileName = `output_audio.mp3`;
+    let audioBase64;
+    const cachedAudio = responseCache.getCachedAudioResponse(responseText);
 
-    for (let i = 0; i < messages.length; i++) {
-      const message = messages[i];
-      console.log(message);
-
-      const fileName = `output_audio.mp3`;
-      let audioData;
-
-      // Check if we have cached audio for this text response
-      const cachedAudio = responseCache.getCachedAudioResponse(message.text);
-
-      if (cachedAudio) {
-        console.log("Using cached audio response");
-        audioData = cachedAudio;
-
-        // Still write the cached audio to file for consistency with the rest of the flow
-        // This step could be optimized out in the future
-        await fs.writeFile(fileName, Buffer.from(cachedAudio, 'base64'));
-      } else {
-        console.log("5. Audio gen Started \n");
-
-        const textInput = message.text;
-        console.log(textInput);
-        console.log("6. Text extracted");
-
-        await textToSpeech(textInput);
-
-        console.log("7. Got the voice !!");
-
-        // Read the generated audio file
-        audioData = await audioFileToBase64(fileName);
-
-        // Cache the audio for future use
-        responseCache.saveAudioResponse(message.text, audioData);
-      }
-
-      // Generate lipsync data
-      // await lipSyncMessage(i);
-
-      console.log("8. Got the lip sync");
-
-      // Attach audio and lipsync to the message
-      message.audio = audioData;
-      console.log("9. Audio attached\n");
-
-      // message.lipsync = await readJsonTranscript(`au`);
-      console.log("10. Lip Sync attached\n");
+    if (cachedAudio) {
+      console.log("Using cached audio for response");
+      audioBase64 = cachedAudio;
+    } else {
+      await textToSpeech(responseText);
+      audioBase64 = await audioFileToBase64(fileName);
+      responseCache.saveAudioResponse(responseText, audioBase64);
     }
 
-    console.log("10. Yeah !! Audio Created");
-
-    res.send({ messages });
+    res.send({
+      messages: [
+        {
+          text: responseText,
+          audio: audioBase64,
+          facialExpression: "smile",
+          animation: "Talking_1",
+        },
+      ],
+    });
   } catch (error) {
-    console.error("Error:", error);
-    res.status(500).send({ error: "Something went wrong!" });
+    console.error("Error in chat endpoint:", error);
+    res.status(500).send({ error: "Failed to get a response from the AI." });
   }
 });
 
-app.post('/clear-cache', async (req, res) => {
+app.post('/clear-cache', (req, res) => {
   try {
-    const cacheType = req.body.cacheType;
-    if (cacheType === 'text') {
-      const count = responseCache.clearTextCache();
-      res.send({ message: `Cleared ${count} entries from text response cache` });
-    } else if (cacheType === 'audio') {
-      const count = responseCache.clearAudioCache();
-      res.send({ message: `Cleared ${count} entries from audio response cache` });
-    } else if (cacheType === 'all') {
-      const counts = responseCache.clearAllCaches();
-      res.send({ message: `Cleared ${counts.text} entries from text response cache and ${counts.audio} entries from audio response cache` });
-    } else {
-      res.status(400).send({ error: 'Invalid cache type' });
-    }
+    const clearedCaches = responseCache.clearAllCaches();
+    res.send({
+      success: true,
+      message: 'All caches cleared.',
+      cleared: clearedCaches
+    });
   } catch (error) {
     console.error("Error clearing cache:", error);
     res.status(500).send({ error: "Failed to clear cache" });
@@ -520,5 +469,5 @@ app.post('/clear-cache', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Flipsmart assistant listening on port ${port}`);
+  console.log(`Server is running on http://localhost:${port}`);
 });
